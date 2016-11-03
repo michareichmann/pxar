@@ -1437,7 +1437,9 @@ class PxarCoreCmd(cmd.Cmd):
         """do_wbcScan [minimal WBC] [number of events] [maximal WBC]: \n
         sets wbc from minWBC until it finds the wbc which has more than 90% filled events or it reaches maxWBC \n
         (default [90] [100] [130])"""
-
+        
+        print 'Turning on HV! YES I DID IT :D'
+        self.api.HVon()
         self.api.daqTriggerSource("extern")
         rocs = self.api.getNEnabledRocs()
         wbc_scan = []
@@ -1484,7 +1486,7 @@ class PxarCoreCmd(cmd.Cmd):
 
             # stopping criterion
             if wbc > 3 + min_wbc:
-                if wbc_scan[-4] > 90:
+                if wbc_scan[-4] > 50:
                     best_wbc = wbc - 3
                     print "Set DAC wbc to", wbc - 3
                     self.api.setDAC("wbc", wbc - 3)
@@ -1510,12 +1512,13 @@ class PxarCoreCmd(cmd.Cmd):
         if best_wbc == None:
             last_wbc = 0
             for i in range(len(wbc_scan)):
-                if wbc_scan[i] < last_wbc and last_wbc > 20:
-                    best_wbc = wbc_values[i-1]
+                if wbc_scan[i] < last_wbc and last_wbc > 10:
+                    best_wbc = wbc_values[i - 1]
                     break
                 last_wbc = wbc_scan[i]
-            print "Set DAC wbc to", best_wbc
-            self.api.setDAC("wbc", best_wbc)
+            if best_wbc != None:
+                print "Set DAC wbc to", best_wbc
+                self.api.setDAC("wbc", best_wbc)
 
         # roc statistics
         print "\nROC STATISTICS:"
@@ -1523,28 +1526,29 @@ class PxarCoreCmd(cmd.Cmd):
         for i in range(rocs):
             print 'roc' + str(i) + '\t',
         print
-        for i in range(-2, 3):
+        for i in range(-4, 4):
             print best_wbc + i, '\t',
             for j in range(rocs):
                 print "{0:2.1f}".format(roc_hits[best_wbc - min_wbc + i][j] / float(max_triggers) * 100), '\t',
             print
 
-        #triggerphase
+        # triggerphase
         print '\nTRIGGER PHASE:'
         for i in range(len(trigger_phase)):
             if trigger_phase[i]:
-                print i, '\t', trigger_phase[i] / 20 * '|', "{0:2.1f}%".format( trigger_phase[i] / float(10))
+                print i, '\t', trigger_phase[i] / 20 * '|', "{0:2.1f}%".format(trigger_phase[i] / float(10))
 
 
         # plot wbc_scan
-        self.window = PxarGui(ROOT.gClient.GetRoot(), 1000, 800)
-        plot = Plotter.create_tgraph(wbc_scan, "wbc scan", "wbc", "evt/trig [%]", min_wbc)
-        self.window.histos.append(plot)
-        self.window.update()
+        #self.window = PxarGui(ROOT.gClient.GetRoot(), 1000, 800)
+        #plot = Plotter.create_tgraph(wbc_scan, "wbc scan", "wbc", "evt/trig [%]", min_wbc)
+        #self.window.histos.append(plot)
+        #self.window.update()
 
     def complete_wbcScan(self):
         # return help for the cmd
         return [self.do_wbcScan.__doc__, '']
+
 
     @arity(0,4,[int, int, int, str])
     def do_latencyScan(self, minlatency = 75, maxlatency = 85, triggers = 50, triggersignal = "extern"):
