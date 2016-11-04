@@ -38,9 +38,11 @@ namespace pxar {
      */
   pixel(uint8_t roc_id, uint8_t column, uint8_t row, double value) : _roc_id(roc_id), _column(column), _row(row), _variance(0) { setValue(value); }
 
-    /** Constructor for pixel objects with rawdata pixel address & value and ROC id initialization.
-     */
-  pixel(uint32_t rawdata, uint8_t rocid, bool invertAddress = false) : _roc_id(rocid) { decodeRaw(rawdata,invertAddress); }
+    /** Constructor for pixel objects with rawdata pixel address & value and ROC id initialization.*/
+    pixel(uint32_t rawdata, uint8_t rocid, bool invertAddress = false, bool linearAddress = false) : _roc_id(rocid) {
+      if(linearAddress) { decodeLinear(rawdata); }
+      else { decodeRaw(rawdata,invertAddress); }
+    }
 
     /** Constructor for pixel objects with analog levels data, ultrablack & black levels and ROC id initialization.
      */
@@ -80,13 +82,13 @@ namespace pxar {
 
     /** Member function to get the value stored for this pixel hit
      */
-    double value() { 
+    double value() {
       return static_cast<double>(_mean);
     };
 
     /** Member function to get the value stored for this pixel hit
      */
-    void setValue(double val) { 
+    void setValue(double val) {
       _mean = static_cast<int16_t>(val);
     };
 
@@ -146,6 +148,11 @@ namespace pxar {
      */
     void decodeRaw(uint32_t raw, bool invert);
 
+    /** Decoding function for PSI46digPlus raw ROC data with linear address space.
+     *  This function throws a pxar::DataDecodingError exception in
+     *  case of a failed decoding attempts. */
+    void decodeLinear(uint32_t raw);
+
     /** Decoding function for PSI46 analog levels ROC data. Parameters "black"
      *  and "ultrablack" refer to the ROC identifier levels and are used to calculate
      *  all other address levels.
@@ -176,7 +183,7 @@ namespace pxar {
      */
     friend std::ostream & operator<<(std::ostream &out, pixel& px) {
       out << "ROC " << static_cast<int>(px.roc())
-	  << " [" << static_cast<int>(px.column()) << "," << static_cast<int>(px.row()) 
+	  << " [" << static_cast<int>(px.column()) << "," << static_cast<int>(px.row())
 	  << "," << static_cast<double>(px.value()) << "]";
       return out;
     }
@@ -293,7 +300,7 @@ namespace pxar {
   };
 
 
-  /** Class to store raw evet data records containing a list of flags to indicate the 
+  /** Class to store raw evet data records containing a list of flags to indicate the
    *  Event status as well as a vector of uint16_t data records containing the actual
    *  Event data in undecoded raw format.
    */
@@ -310,7 +317,7 @@ namespace pxar {
     bool IsStartError() { return (flags & 1) != 0; }
     bool IsEndError()   { return (flags & 2) != 0; }
     bool IsOverflow()   { return (flags & 4) != 0; }
-	
+
     size_t GetSize() { return data.size(); }
     void Add(uint16_t value) { data.push_back(value); }
     uint16_t operator[](size_t index) { return data.at(index); }
@@ -341,13 +348,13 @@ namespace pxar {
    */
   class DLLEXPORT pixelConfig {
   public:
-  pixelConfig() : 
+  pixelConfig() :
     _column(0), _row(0), _roc_id(0),
       _trim(15), _mask(true), _enable(false) {}
-  pixelConfig(uint8_t column, uint8_t row, uint8_t trim, bool mask = true, bool enable = false) : 
+  pixelConfig(uint8_t column, uint8_t row, uint8_t trim, bool mask = true, bool enable = false) :
     _column(column), _row(row), _roc_id(0), _trim(trim),
       _mask(mask), _enable(enable) {}
-  pixelConfig(uint8_t roc, uint8_t column, uint8_t row, uint8_t trim, bool mask = true, bool enable = false) : 
+  pixelConfig(uint8_t roc, uint8_t column, uint8_t row, uint8_t trim, bool mask = true, bool enable = false) :
     _column(column), _row(row), _roc_id(roc), _trim(trim),
       _mask(mask), _enable(enable) {}
     uint8_t column() const { return _column; }
@@ -404,8 +411,8 @@ namespace pxar {
 
   /** Class for statistics on event and pixel decoding
    *
-   *  The class collects all decoding statistics gathered during one DAQ 
-   *  session (i.e. one test command from pxarCore or one session started 
+   *  The class collects all decoding statistics gathered during one DAQ
+   *  session (i.e. one test command from pxarCore or one session started
    *  with daqStart() and ended with daqStop().
    */
   class DLLEXPORT statistics {
@@ -463,7 +470,7 @@ namespace pxar {
       return (errors_roc_missing()
 	      + errors_roc_readback());
     };
-    uint32_t errors_pixel() { 
+    uint32_t errors_pixel() {
       return (errors_pixel_incomplete()
 	      + errors_pixel_address()
 	      + errors_pixel_pulseheight()

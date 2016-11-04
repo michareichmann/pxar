@@ -146,6 +146,38 @@ namespace pxar {
     return &roc_Event;
   }
 
+//  void dtbEventDecoder::ProcessTBMHeader(uint16_t h1, uint16_t h2) {
+//    // Check the alignment markers to be correct:
+//    if((h1 & 0xe000) != 0xa000 || (h2 & 0xe000) != 0x8000)
+//    { decodingStats.m_errors_tbm_header++; }
+//    // Store the two header words:
+//    roc_Event.addHeader(((h1 & 0x00ff) << 8) + (h2 & 0x00ff));
+//
+//    LOG(logDEBUGPIPES) << "TBM " << static_cast<int>(GetChannel()) << " Header:";
+//    IFLOG(logDEBUGPIPES) { roc_Event.printHeader(); }
+//  }
+//
+//  void dtbEventDecoder::ProcessTBMTrailer(uint16_t t1, uint16_t t2) {
+//    // Check the alignment markers to be correct:
+//    if((t1 & 0xe000) != 0xe000 || (t2 & 0xe000) != 0xc000)
+//    { decodingStats.m_errors_tbm_trailer++; }
+//
+//    // Check possible DESER400 error flags in the TBM trailer:
+//    if((t1 & 0x1000) == 0x1000 || (t2 & 0x1000) == 0x1000) {
+//      // Currently the same error bits are stored in both trailer words, so only evaluating one of them.
+//      evalDeser400Errors(t1);
+//    }
+//
+//      // No Error flag is set by the DESER400, just decode the TBM header as usual:
+//    else {
+//      // Store the two trailer words:
+//      roc_Event.addTrailer(((t1 & 0x00ff) << 8) + (t2 & 0x00ff));
+//
+//      LOG(logDEBUGPIPES) << "TBM " << static_cast<int>(GetChannel()) << " Trailer:";
+//      IFLOG(logDEBUGPIPES) roc_Event.printTrailer();
+//    }
+//  }
+
   void dtbEventDecoder::ProcessTBM(rawEvent * sample) {
     LOG(logDEBUGPIPES) << "Processing TBM header and trailer...";
 
@@ -203,6 +235,8 @@ namespace pxar {
 
     // Check if ROC has inverted pixel address (ROC_PSI46DIG):
     bool invertedAddress = ( GetDeviceType() == ROC_PSI46DIG ? true : false );
+    // Check if ROC is a Layer1 chip with different address encoding:
+    bool linearAddress = ( GetDeviceType() >= ROC_PROC600 ? true : false );
 
     // Loop over the full data:
     for(std::vector<uint16_t>::iterator word = sample->data.begin(); word != sample->data.end(); word++) {
@@ -211,62 +245,63 @@ namespace pxar {
       // Check if we have a ROC header:
       if(((*word) & 0xe000) == 0x4000) {
 
-	// Count ROC Headers up:
-	roc_n++;
+        // Count ROC Headers up:
+        roc_n++;
 
-	// Check for DESER400 failure:
-	if(((*word) & 0x0ff0) == 0x0ff0) {
-	  LOG(logCRITICAL) << "TBM " << static_cast<int>(GetChannel())
-			   << " ROC " << static_cast<int>(roc_n)
-			   << " header reports DESER400 failure!";
-	  decodingStats.m_errors_event_invalid_xor++;
-	  throw DataDecodingError("Invalid XOR eye diagram encountered.");
-	}
+        // Check for DESER400 failure:
+        if(((*word) & 0x0ff0) == 0x0ff0) {
+          LOG(logCRITICAL) << "Channel " << static_cast<int>(GetChannel())
+                           << " ROC " << static_cast<int>(roc_n)
+                           << " header reports DESER400 failure!";
+          decodingStats.m_errors_event_invalid_xor++;
+          throw DataDecodingError("Invalid XOR eye diagram encountered.");
+        }
 
-	// Decode the readback bits in the ROC header:
-	if(GetDeviceType() >= ROC_PSI46DIGV2) { evalReadback(static_cast<uint8_t>(roc_n),(*word)); }
+        // Decode the readback bits in the ROC header:
+        if(GetDeviceType() >= ROC_PSI46DIGV2) { evalReadback(static_cast<uint8_t>(roc_n),(*word)); }
       }
+
       // We have a pixel hit:
       else if(((*word) & 0xe000) <= 0x2000) {
 
-	// Only one word left or unexpected alignment marker:
-	if(sample->data.end() - word < 2 || ((*word) & 0x8000)) {
-	  decodingStats.m_errors_pixel_incomplete++;
-	  break;
-	}
+        // Only one word left or unexpected alignment marker:
+        if(sample->data.end() - word < 2 || ((*word) & 0x8000)) {
+          decodingStats.m_errors_pixel_incomplete++;
+          break;
+        }
 
-	// FIXME optional check:
-	// (*word) >> 13 == 0
-	// (*(word+1) >> 13 == 1
+        // FIXME optional check:
+        // (*word) >> 13 == 0
+        // (*(word+1) >> 13 == 1
 
-	uint32_t raw = (((*word) & 0x0fff) << 12) + ((*(++word)) & 0x0fff);
-	try {
-	  // Check if this is just fill bits of the TBM09 data stream
-	  // accounting for the other channel:
-	  if(GetTokenChainLength() == 4 && (raw&0xffffff) == 0xffffff) {
-	    LOG(logDEBUGPIPES) << "Empty hit detected (TBM09 data streams). Skipping.";
-	    continue;
-	  }
+        uint32_t raw = (((*word) & 0x0fff) << 12) + ((*(++word)) & 0x0fff);
+        try {
+          // Check if this is just fill bits of the TBM09 data stream
+          // accounting for the other channel:
+          if(GetTokenChainLength() == 4 && (raw&0xffffff) == 0xffffff) {
+            LOG(logDEBUGPIPES) << "Empty hit detected (TBM09 data streams). Skipping.";
+            continue;
+          }
 
-	  // Get the correct ROC id: Channel number x ROC offset (= token chain length)
-	  // TBM08x: channel 0: 0-7, channel 1: 8-15
-	  // TBM09x: channel 0: 0-3, channel 1: 4-7, channel 2: 8-11, channel 3: 12-15
-	  pixel pix(raw,static_cast<uint8_t>(roc_n + GetChannel()*GetTokenChainLength()),invertedAddress);
-	  roc_Event.pixels.push_back(pix);
-	  decodingStats.m_info_pixels_valid++;
-	}
-	catch(DataInvalidAddressError /*&e*/){
-	  // decoding of raw address lead to invalid address
-	  decodingStats.m_errors_pixel_address++;
-	}
-	catch(DataInvalidPulseheightError /*&e*/){
-	  // decoding of pulse height featured non-zero fill bit
-	  decodingStats.m_errors_pixel_pulseheight++;
-	}
-	catch(DataCorruptBufferError /*&e*/){
-	  // decoding returned row 80 - corrupt data buffer
-	  decodingStats.m_errors_pixel_buffer_corrupt++;
-	}
+          // Get the correct ROC id: Channel number x ROC offset (= token chain length)
+          // TBM08x: channel 0: 0-7, channel 1: 8-15
+          // TBM09x: channel 0: 0-3, channel 1: 4-7, channel 2: 8-11, channel 3: 12-15
+          pixel pix(raw, static_cast<uint8_t>(roc_n + GetChannel()*GetTokenChainLength()), invertedAddress, linearAddress);
+          roc_Event.pixels.push_back(pix);
+          decodingStats.m_info_pixels_valid++;
+        }
+        catch(DataInvalidAddressError /*&e*/){
+          // decoding of raw address lead to invalid address
+          decodingStats.m_errors_pixel_address++;
+        }
+        catch(DataInvalidPulseheightError /*&e*/){
+          // decoding of pulse height featured non-zero fill bit
+          decodingStats.m_errors_pixel_pulseheight++;
+        }
+        catch(DataCorruptBufferError /*&e*/){
+          // decoding returned row 80 - corrupt data buffer
+          decodingStats.m_errors_pixel_buffer_corrupt++;
+        }
       }
     }
 
@@ -359,6 +394,8 @@ namespace pxar {
 
     // Check if ROC has inverted pixel address (ROC_PSI46DIG):
     bool invertedAddress = ( GetDeviceType() == ROC_PSI46DIG ? true : false );
+    // Check if ROC is a Layer1 chip with different address encoding:
+    bool linearAddress = ( GetDeviceType() == ROC_PROC600 ? true : false );
 
     // Reserve expected number of pixels from data length (subtract ROC headers):
     if(sample->GetSize()-GetTokenChainLength() > 0) {
@@ -386,7 +423,7 @@ namespace pxar {
 
 	uint32_t raw = (((*word) & 0x0fff) << 12) + ((*(++word)) & 0x0fff);
 	try {
-	  pixel pix(raw,roc_n,invertedAddress);
+	  pixel pix(raw,roc_n,invertedAddress, linearAddress);
 	  roc_Event.pixels.push_back(pix);
 	  decodingStats.m_info_pixels_valid++;
 	}
