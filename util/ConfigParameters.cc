@@ -633,9 +633,16 @@ vector<string> ConfigParameters::getDacs() {
 // ----------------------------------------------------------------------
 void ConfigParameters::readRocDacs() {
   if (!fReadDacParameters) {
+
+    stringstream firstFile, lastFile;
+    firstFile << fDirectory << "/" << fDACParametersFileName << fTrimVcalSuffix << "_C" << uint16_t(fI2cAddresses.front()) << ".dat";
+    lastFile << fDirectory << "/" << fDACParametersFileName << fTrimVcalSuffix << "_C" << uint16_t(fI2cAddresses.back()) << ".dat";
+    LOG(logINFO) << "readRocDacs: " << firstFile.str() << " .. " << lastFile.str();
+
     for (unsigned int i = 0; i < fnRocs; ++i) {
       stringstream filename;
-      filename << fDirectory << "/" << fDACParametersFileName << fTrimVcalSuffix << "_C" << static_cast<uint16_t>(fI2cAddresses[i]) << ".dat";
+      filename << fDirectory << "/" << fDACParametersFileName << fTrimVcalSuffix << "_C" << uint16_t(fI2cAddresses[i]) << ".dat";
+      std::cout << filename << endl;
       vector<pair<string, uint8_t> > rocDacs = readDacFile(filename.str());
       fDacParameters.push_back(rocDacs);
     }
@@ -1087,9 +1094,13 @@ void ConfigParameters::readNrocs(string line) {
   string nrocs = line.substr(s0);
   fnRocs = atoi(nrocs.c_str());
   string::size_type s1 = line.find("i2c:");
+  LOG(logINFO) << "Found " << fnRocs << "ROC " << (fnRocs == 1 ? "" : "s");
   if (string::npos == s1) {
-    return;
-  } else {
+    LOG(logINFO) << "Using default i2c addresses!";
+    for (uint8_t i_i2c = 0; i_i2c < fnRocs; i_i2c++)
+      fI2cAddresses.push_back(i_i2c);
+  }
+  else {
     string i2cstring = line.substr(s1+5);
     s0 = i2cstring.find(",");
     string i2c(""), leftover("");
