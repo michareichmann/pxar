@@ -20,7 +20,7 @@ except ImportError:
     gui_available = False
     pass
 if gui_available:
-    from ROOT import PyConfig
+    from ROOT import PyConfig, TCanvas
     PyConfig.IgnoreCommandLineOptions = True
     from pxar_gui import PxarGui
     from pxar_plotter import Plotter
@@ -53,6 +53,7 @@ class PxarCoreCmd(cmd.Cmd):
         self.api = api
         self.dir = conf_dir
         self.window = None
+        self.Plots = []
         if gui and gui_available:
             self.window = PxarGui(ROOT.gClient.GetRoot(), 800, 800)
         elif gui and not gui_available:
@@ -77,10 +78,14 @@ class PxarCoreCmd(cmd.Cmd):
                 pixels.append(px)
         self.plot_map(pixels, 'Event Display', True)
 
-    def plot_map(self, data, name, count=False):
-        if not self.window:
-            print data
-            return
+    def plot_map(self, data, name, count=False, no_stats=False):
+        # if not self.window:
+        #     print data
+        #     return
+
+        # c = gROOT.GetListOfCanvases()[-1]
+        c = TCanvas('c', 'c', 1000, 1000)
+        c.SetRightMargin(.12)
 
         # Find number of ROCs present:
         module = False
@@ -89,7 +94,7 @@ class PxarCoreCmd(cmd.Cmd):
                 module = True
                 break
         # Prepare new numpy matrix:
-        d = zeros((417 if module else 53, 161 if module else 81))
+        d = zeros((417 if module else 52, 161 if module else 80))
         for px in data:
             xoffset = 52 * (px.roc % 8) if module else 0
             yoffset = 80 * int(px.roc / 8) if module else 0
@@ -97,27 +102,16 @@ class PxarCoreCmd(cmd.Cmd):
             y = (px.row + yoffset) if (px.roc < 8) else (2 * yoffset - px.row - 1)
             # Reverse order of the upper ROC row:
             x = (px.column + xoffset) if (px.roc < 8) else (415 - xoffset - px.column)
-            d[x + 1][y + 1] += 1 if count else px.value
+            d[x][y] += 1 if count else px.value
 
-        plot = Plotter.create_th2(d, 0, 417 if module else 53, 0, 161 if module else 81, name, 'pixels x', 'pixels y',
-                                  name)
-        self.window.histos.append(plot)
-        self.window.update()
-
-    def plot_1d(self, data, name, dacname, min_val, max_val):
-        if not self.window:
-            print_data(self.fullOutput, data, (max_val - min_val) / len(data))
-            return
-
-        # Prepare new numpy matrix:
-        d = zeros(len(data))
-        for idac, dac in enumerate(data):
-            if dac:
-                d[idac] = dac[0].value
-
-        plot = Plotter.create_th1(d, min_val, max_val, name, dacname, name)
-        self.window.histos.append(plot)
-        self.window.update()
+        plot = Plotter.create_th2(d, 0, 417 if module else 52, 0, 161 if module else 80, name, 'pixels x', 'pixels y', name)
+        if no_stats:
+            plot.SetStats(0)
+        plot.Draw('COLZ')
+        self.window = c
+        self.Plots.append(plot)
+        # self.window.histos.append(plot)
+        self.window.Update()
 
     def plot_2d(self, data, name, dac1, step1, min1, max1, dac2, step2, min2, max2):
         if not self.window:
@@ -591,13 +585,22 @@ class PxarCoreCmd(cmd.Cmd):
     @arity(0, 2, [int, int])
     def do_getEfficiencyMap(self, flags=0, nTriggers=10):
         """getEfficiencyMap [flags = 0] [nTriggers = 10]: returns the efficiency map"""
-        self.window = PxarGui(ROOT.gClient.GetRoot(), 1000, 800)
         data = self.api.getEfficiencyMap(flags, nTriggers)
-        self.plot_map(data, "Efficiency")
+        self.plot_map(data, "Pixel Alive Map", no_stats=True)
 
     def complete_getEfficiencyMap(self, text, line, start_index, end_index):
         # return help for the cmd
         return [self.do_getEfficiencyMap.__doc__, '']
+
+    @arity(0, 2, [int, int])
+    def do_getXPixelAlive(self, nTriggers=50):
+        """getxPixelAlive [flags = 0] [nTriggers = 10]: returns the efficiency map"""
+        data = self.api.getEfficiencyMap(896, nTriggers)
+        self.plot_map(data, "XPixel Alive Map", no_stats=True)
+
+    def complete_getXPixelAlive(self, text, line, start_index, end_index):
+        # return help for the cmd
+        return [self.do_getXPixelAlive.__doc__, '']
 
     @arity(0, 6, [str, int, int, int, int, int])
     def do_getPulseheightVsDAC(self, dacname="vcal", dacstep=1, dacmin=0, dacmax=255, flags=0, nTriggers=10):
@@ -2161,17 +2164,16 @@ def main(argv=None):
     parser = argparse.ArgumentParser(prog=prog_name, description="A Simple Command Line Interface to the pxar API.")
     parser.add_argument('--dir', '-d', metavar="DIR", help="The digit rectory with all required config files.")
     parser.add_argument('--gui', '-g', action="store_true", help="The output verbosity set in the pxar API.")
-    parser.add_argument('--run', '-r', metavar="FILE",
-                        help="Load a cmdline script to be executed before entering the prompt.")
-    parser.add_argument('--verbosity', '-v', metavar="LEVEL", default="INFO",
-                        help="The output verbosity set in the pxar API.")
+    parser.add_argument('--run', '-r', metavar="FILE", help="Load a cmdline script to be executed before entering the prompt.")
+    parser.add_argument('--verbosity', '-v', metavar="LEVEL", default="INFO", help="The output verbosity set in the pxar API.")
+    parser.add_argument('--trim', '-T', nargs='?', default=None, help="trim file value as in pxar")
     args = parser.parse_args(argv)
 
     print '\n================================================='
     print '# Extended pXarCore Command Line Interface'
     print '=================================================\n'
 
-    api = PxarStartup(args.dir, args.verbosity)
+    api = PxarStartup(args.dir, args.verbosity, args.trim)
 
     # start command line
     prompt = PxarCoreCmd(api, args.gui, args.dir)

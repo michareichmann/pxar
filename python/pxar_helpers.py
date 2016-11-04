@@ -7,6 +7,7 @@ from PyPxarCore import Pixel, PixelConfig, PyPxarCore, PyRegisterDictionary, PyP
 from functools import wraps # used in parameter verification decorator ("arity")
 import os # for file system cmds
 import sys
+import shlex
 
 # "arity": decorator used for parameter parsing/verification on each cmd function call
 # Usually, the cmd module only passes a single string ('line') with all parameters;
@@ -107,13 +108,90 @@ class PxarParametersFile:
     def getAll(self):
         return self.config
 
-def PxarStartup(directory, verbosity):
+class PxarMaskFile:
+    """ class that loads the mask files of pxarGUI """
+    def __init__(self, f):
+        self.config = list()
+        thisf = open(f)
+        try:
+            for line in thisf:
+                if not line.startswith("--") and not line.startswith("#"):
+                    parts = shlex.split(line)
+                    if len(parts) == 4:
+                        # single pixel to be masked:
+                        p = PixelConfig(int(parts[2]),int(parts[3]),15)
+                        p.roc = int(parts[1])
+                        p.mask = True
+                        self.config.append(p)
+                    elif len(parts) == 3:
+                        # Full Column/Row to be masked:
+                        if parts[0] == "col":
+                            for row in range(0, 80):
+                                p = PixelConfig(int(parts[2]),row,15)
+                                p.roc = int(parts[1])
+                                p.mask = True
+                                self.config.append(p)
+                        elif parts[0] == "row":
+                            for column in range(0, 52):
+                                p = PixelConfig(column,int(parts[2]),15)
+                                p.roc = int(parts[1])
+                                p.mask = True
+                                self.config.append(p)
+                    elif len(parts) == 2:
+                        # Full ROC to be masked
+                        for column in range(0, 52):
+                            for row in range(0, 80):
+                                p = PixelConfig(column,row,15)
+                                p.roc = int(parts[1])
+                                p.mask = True
+                                self.config.append(p)
+        finally:
+            thisf.close()
+    def show(self):
+        print self.config
+    def get(self):
+        return self.config
+
+
+class PxarTrimFile:
+    """ class that loads the old-style trim parameters files of psi46expert """
+    def __init__(self, f, roc, masks):
+        self.config = list()
+        thisf = open(f)
+        try:
+            for line in thisf:
+                if not line.startswith("--") and not line.startswith("#"):
+                    parts = shlex.split(line)
+                    if len(parts) == 4:
+                        # Ignore the 'Pix' string in the file...
+                        p = PixelConfig(int(parts[2]),int(parts[3]),int(parts[0]))
+                        p.roc = roc
+                        # Check if this pixel is masked:
+                        if p in masks:
+                            p.mask = True
+                        else:
+                            p.mask = False
+                        self.config.append(p)
+        finally:
+            thisf.close()
+    def show(self):
+        print self.config
+    def get(self, opt, default = None):
+        if default:
+            return self.config.get(opt.lower(), default)
+        else:
+            return self.config[opt.lower()]
+    def getAll(self):
+        return self.config
+
+def PxarStartup(directory, verbosity, trim=None):
     if not directory or not os.path.isdir(directory):
         print "Error: no or invalid configuration directory specified!"
         sys.exit(404)
 
     config = PxarConfigFile('%sconfigParameters.dat'%(os.path.join(directory,"")))
     tbparameters = PxarParametersFile('%s%s'%(os.path.join(directory,""),config.get("tbParameters")))
+    masks = PxarMaskFile('%s%s'%(os.path.join(directory,""),config.get("maskFile")))
 
     # Power settings:
     power_settings = {
@@ -157,10 +235,14 @@ def PxarStartup(directory, verbosity):
             i2c = i2cs[roc]
         else:
             i2c = roc
-        dacconfig = PxarParametersFile('%s%s_C%i.dat'%(os.path.join(directory,""),config.get("dacParameters"),i2c))
+        dac_file = '{dir}/{f}{trim}_C{i2c}.dat'.format(dir=directory, trim=trim if trim is not None else '', i2c=i2c, f=config.get('dacParameters'))
+        trim_file = '{dir}/{f}{trim}_C{i2c}.dat'.format(dir=directory, trim=trim if trim is not None else '', i2c=i2c, f=config.get('trimParameters'))
+        dacconfig = PxarParametersFile(dac_file)
+        trimconfig = PxarTrimFile(trim_file, i2c, masks.get())
+        print "We have " + str(len(trimconfig.getAll())) + " pixels for ROC " + str(i2c)
         rocI2C.append(i2c)
         rocDacs.append(dacconfig.getAll())
-        rocPixels.append(pixels)
+        rocPixels.append(trimconfig.getAll())
 
 
     # set pgcal according to wbc
