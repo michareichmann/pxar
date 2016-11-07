@@ -20,7 +20,7 @@ except ImportError:
     gui_available = False
     pass
 if gui_available:
-    from ROOT import PyConfig, TCanvas
+    from ROOT import PyConfig, TCanvas, TGraph
     PyConfig.IgnoreCommandLineOptions = True
     from pxar_gui import PxarGui
     from pxar_plotter import Plotter
@@ -77,6 +77,11 @@ class PxarCoreCmd(cmd.Cmd):
             for px in data.pixels:
                 pixels.append(px)
         self.plot_map(pixels, 'Event Display', True)
+
+    def draw_histo(self, h, draw_opt=''):
+        self.window = TCanvas('c', 'c', 1000, 1000)
+        h.Draw(draw_opt)
+        self.Plots.append(h)
 
     def plot_map(self, data, name, count=False, no_stats=False):
         # if not self.window:
@@ -389,6 +394,31 @@ class PxarCoreCmd(cmd.Cmd):
             dec += int(i) * pow(2, length - 1)
             length -= 1
         return dec
+
+    def eff_check(self, ntrig=10, col=14, row=14, vcal=200):
+        print 'checking pixel with col {c} and row {r}'.format(c=col, r=row)
+        self.api.HVon()
+        self.api.setDAC('vcal', vcal)
+        self.enable_pix(col, row)
+        self.api.maskAllPixels(0)
+        # self.api.maskPixel(51, 79, 1)
+        self.api.daqStart()
+        self.api.daqTrigger(ntrig, 500)
+        data = self.api.daqGetEventBuffer()
+        good_events = 0
+        for ev in data:
+            for px in ev.pixels:
+                if ntrig <= 50:
+                    print px,
+                if px.column == col and px.row == row and len(ev.pixels) == 1:
+                    good_events += 1
+            if ntrig <= 50:
+                print
+        eff = 100 * good_events / float(ntrig)
+        print '\nEFFICIENCY:\n  {e}/{t} ({p:5.2f}%)'.format(e=good_events, t=ntrig, p=eff)
+        # self.api.HVoff()
+        # self.api.daqStop()
+        return eff
     # endregion
 
     # ==============================================
@@ -2123,7 +2153,37 @@ class PxarCoreCmd(cmd.Cmd):
 
     def complete_do_adjust_black(self):
         # return help for the cmd
-        return [self.do_do_adjust_black.__doc__, '']
+        return [self.do_adjust_black.__doc__, '']
+
+    @arity(0, 4, [int, int, int, int])
+    def do_efficiency_check(self, ntrig=10, col=14, row=14, vcal=200):
+        """ checkADCTimeConstant [vcal=200] [ntrig=10]: sends an amount of triggers for a fixed vcal in high/low region and prints adc values"""
+        self.eff_check(ntrig, col, row, vcal)
+        self.api.daqStop()
+
+    def complete_efficiency_check(self):
+        # return help for the cmd
+        return [self.do_efficiency_check.__doc__, '']
+
+    @arity(0, 3, [int, int, int])
+    def do_scan_vthrcomp(self, start=90, stop=150, ntrig=10):
+        """ checkADCTimeConstant [vcal=200] [ntrig=10]: sends an amount of triggers for a fixed vcal in high/low region and prints adc values"""
+        self.api.HVon()
+        gr = TGraph()
+        gr.SetMarkerStyle(20)
+        for i, vthrcmop in enumerate(xrange(start, stop)):
+            self.api.setDAC('vthrcomp', vthrcmop)
+            data = self.api.getEfficiencyMap(896, ntrig)
+            eff = sum(px.value for px in data) / 4160 / ntrig * 100
+            gr.SetPoint(i, vthrcmop, eff)
+            print vthrcmop, eff
+        gr.GetYaxis().SetTitle('Efficiency [%]')
+        gr.GetXaxis().SetTitle('vthrcomps [dacs]')
+        self.draw_histo(gr, 'alp')
+
+    def complete_scan_vthrcomp(self):
+        # return help for the cmd
+        return [self.do_scan_vthrcomp.__doc__, '']
 
     @staticmethod
     def do_quit(q=1):
