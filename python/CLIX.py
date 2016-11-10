@@ -2165,6 +2165,20 @@ class PxarCoreCmd(cmd.Cmd):
         # return help for the cmd
         return [self.do_efficiency_check.__doc__, '']
 
+    @arity(0, 2, [int, int])
+    def do_hits(self, ntrig=10, delay=10000):
+        """ checkADCTimeConstant [vcal=200] [ntrig=10]: sends an amount of triggers for a fixed vcal in high/low region and prints adc values"""
+        self.api.daqStart()
+        self.api.daqTrigger(ntrig, delay)
+        data = self.api.daqGetEventBuffer()
+        eff = '{0:5.2f}%'.format(sum(len(ev.pixels) for ev in data) / float(ntrig) * 100.)
+        print eff
+        self.api.daqStop()
+
+    def complete_efficiency_check(self):
+        # return help for the cmd
+        return [self.do_efficiency_check.__doc__, '']
+
     @arity(0, 3, [int, int, int])
     def do_scan_vthrcomp(self, start=90, stop=150, ntrig=10):
         """ checkADCTimeConstant [vcal=200] [ntrig=10]: sends an amount of triggers for a fixed vcal in high/low region and prints adc values"""
