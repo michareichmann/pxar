@@ -320,6 +320,9 @@ class PxarCoreCmd(cmd.Cmd):
         self.api.testPixel(row, col, 1, roc)
         self.api.maskPixel(row, col, 0, roc)
 
+    def get_activated(self, roc=None):
+        return (self.api.getNEnabledPixels(), self.api.getNMaskedPixels()) if roc is None else (self.api.getNEnabledPixels(roc), self.api.getNMaskedPixels(roc))
+
     @staticmethod
     def translate_level(level, event, roc=0):
         offset = 7
@@ -1094,16 +1097,16 @@ class PxarCoreCmd(cmd.Cmd):
         return [self.do_enableAllPixel.__doc__, '']
 
     @arity(0, 3, [int, int, int])
-    def do_enableOnePixel(self, row=14, column=14, roc=0):
+    def do_enableOnePixel(self, row=14, column=14, roc=None):
         """enableOnePixel [row] [column] : enables one Pixel (default 14/14); masks and disables the rest"""
         self.api.testAllPixels(0, roc)
         self.api.maskAllPixels(1, roc)
-        print "--> disable and mask all Pixels (" + str(self.api.getNEnabledPixels(0)) + ", " + str(
-            self.api.getNMaskedPixels(0)) + ")"
+        print '--> disable and mask all pixels of all activated ROCs'
         self.api.testPixel(row, column, 1, roc)
         self.api.maskPixel(row, column, 0, roc)
-        print "--> enable and unmask Pixel " + str(row) + "/" + str(column) + " (" + str(
-            self.api.getNEnabledPixels(0)) + ", " + str(self.api.getNMaskedPixels(0)) + ")"
+        print_string = '--> enable and unmask Pixel {r}/{c}: '.format(r=row, c=column)
+        print_string += '(' + ','.join('ROC {n}: {a}/{m}'.format(n=roc, a=self.get_activated(roc)[0], m=self.get_activated(roc)[1]) for roc in xrange(self.api.getNEnabledRocs())) + ')'
+        print print_string
 
     def complete_enableOnePixel(self, text, line, start_index, end_index):
         # return help for the cmd
@@ -2206,6 +2209,7 @@ class PxarCoreCmd(cmd.Cmd):
 
     # shortcuts
     do_q = do_quit
+    do_exit = do_quit
     do_a = do_analogLevelScan
     do_sd = do_set_tin_tout
     do_dre = do_daqRawEvent
