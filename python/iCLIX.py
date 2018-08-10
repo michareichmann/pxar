@@ -108,8 +108,10 @@ class CLIX:
         return row, col, ph
 
     def decode_pixel(self, lst):
-        col, row = None, None
+        n_hits = 0
         for i in xrange(0, len(lst), 2):
+            if (lst[i] & 0x0ffc) == 0x7f8:
+                break
             print '\nDecoding Pixel Hit {n}'.format(n=i / 2 + 1)
             bin_str = ''.join(bin(lst[j])[2:].zfill(16) for j in [i, i + 1])
             print '    0000 CCCC CCRR RRRR MMMM RRRP PPP0 PPPP'
@@ -118,9 +120,10 @@ class CLIX:
             raw_int = (lst[i] << 12) + (lst[i + 1] & 0x0fff)
             row, col, ph = self.decode_digital(raw_int) if not self.IsAnalogue else None
             print '\n===== [{c}, {r}, {p}] ====='.format(c=col, r=row, p=ph)
-            if hex(lst[i + 1]).startswith('0x4'):
+            n_hits += 2
+            if hex(lst[i + 1])[:2].zfill(4).startswith('4'):
                 break
-        return col, row
+        return n_hits
 
     # -----------------------------------------
     # region API
@@ -137,6 +140,12 @@ class CLIX:
             return
         self.TBDelays[delay] = value
         self.api.setTestboardDelays(self.TBDelays)
+
+    def set_dac(self, name, value, roc_id=None):
+        self.api.setDAC(name, value, roc_id)
+
+    def get_ia(self):
+        print 'Analog Current: {} mA'.format(self.api.getTBia() * 1000)
     # endregion
 
     # -----------------------------------------
@@ -169,25 +178,12 @@ class CLIX:
         self.daq_start()
         self.daq_trigger()
         event = self.daq_get_raw_event(convert=0)
-        print 'Raw data: {}\n'.format(event)
-        self.decode_header(event[0])
-        self.decode_pixel(event[1:])
-        # full_data = [bin(word)[2:].zfill(4 * 4) for word in event]
-        # print full_data
-        # data_str = ''.join(full_data)
-        # print '\n    TBMB  ROC HEADER RB TBM0 DATA.........1 TBME DATA.........2'
-        # print 'bin', ' '.join([data_str[i:i+4] for i in xrange(0, len(data_str), 4)])
-        # print 'hex', '    '.join(hex(int(data_str, 2))[2:])
-        # data = bin((event[1] << 12) + (event[2] & 0x0fff))[2:].zfill(6 * 4)
-        # print '\nData Decoding:'
-        # print 'C1  C2  R2  R1  R0'
-        # print ' '.join([data[i:i+3] for i in xrange(0, len(data), 3)])
-        # print ' '.join([' {} '.format(int(data[i:i+3], 2)) for i in xrange(0, len(data), 3)])
-        # print 'ROW = 80 - (36 * r2 + 6 * r1 + r0) / 2'
-        # print 'COL = 2 * (6 * c1 + c0) + (r1 & 1)'
-        # val = int(data, 2)
-        # print 'ROW:', 80 - (36 * bit_shift(val, 15) + 6 * bit_shift(val, 12) + bit_shift(val, 9)) / 2
-        # print 'COL:', 2 * (6 * bit_shift(val, 18) + bit_shift(val, 21)) + (bit_shift(val, 9) & 1)
+        print 'Raw data: {}\nhex:   {}\n'.format(event, [hex(num)[2:].zfill(4) for num in event])
+        i = 0
+        for _ in event:
+            if i < len(event) and self.decode_header(event[i]):
+                i += self.decode_pixel(event[i+1:])
+            i += 1
 
     def signal_probe(self, probe=None, signal=None):
         probes = ['a1', 'a2', 'd1', 'd2']
@@ -286,7 +282,7 @@ class CLIX:
         # Prepare new numpy matrix:
         d = zeros((417 if is_module else 52, 161 if is_module else 80))
         for px in data:
-            roc = (px.roc - 12) % 16 if proc else 0
+            roc = (px.roc - 12) % 16 if proc else px.roc
             xoffset = 52 * (roc % 8) if is_module else 0
             yoffset = 80 * int(roc / 8) if is_module else 0
 
@@ -324,7 +320,7 @@ class CLIX:
     def get_efficiency_map(self, flags=0, n_triggers=10):
         data = self.api.getEfficiencyMap(flags, n_triggers)
         self.print_eff(data, n_triggers)
-        self.plot_map(data, "Efficiency", no_stats=True)
+        self.plot_map(data, 'Efficiency', no_stats=True)
 
     def hitmap(self, t=1, n=10000):
         self.api.HVon()
@@ -370,6 +366,8 @@ class CLIX:
         print
         good = []
         for clk in xrange(20):
+            if clk==13:
+                continue
             self.set_clock(clk)
             print '{:2d}:'.format(clk),
             for phase in xrange(8):
@@ -463,6 +461,7 @@ if __name__ == '__main__':
 
     # shortcuts
 
+    ia = z.get_ia
     hvon = z.api.HVon
     hvoff = z.api.HVoff
     ge = z.get_efficiency_map
