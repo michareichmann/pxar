@@ -32,6 +32,7 @@ import sys
 from time import time, sleep, strftime
 from collections import OrderedDict
 from progressbar import Bar, ETA, FileTransferSpeed, Percentage, ProgressBar
+from utils import *
 
 # set up the DAC and probe dictionaries
 dacdict = PyRegisterDictionary()
@@ -446,9 +447,57 @@ class PxarCoreCmd(cmd.Cmd):
     def translate_level(level, event, roc=0):
         offset = 7
         y = level - event[roc + 1]
+    # endregion
+
+    @arity(0, 2, [int, float])
+    def do_trigger_loop(self, rate=10, duration=1):
+        """ do_triggerLoop [rate] [duration]: sends triggers with rate for duration"""
+        self.api.daqStart()
+        triggers = int(60 * duration) * rate
+        print "number of triggers:", triggers
+        for i in range(triggers):
+            self.api.daqTrigger(1, 500)
+            sleep(float(1) / rate)
+            #            print self.convertedRaw()
+            #            print "", '\r{0:4.2f}%'.format(100*(float(i)/nTrig)), "\r",
+            sec = (triggers - i) / float(rate) % 60
+            min_val = (triggers - i) / rate / 60
+            print "", '\r{0:02d}:'.format(min_val), '\b{0:02d}:'.format(int(sec)), '\b{0:02.0f}'.format(
+                100 * (sec - int(sec))),
+            sys.stdout.flush()
+        print
+        self.api.daqStop()
+
+    def complete_trigger_loop(self):
+        return [self.do_trigger_loop.__doc__, '']
         y += (event[roc + 1] - event[roc + 0] + offset) / 8
         y /= (event[roc + 1] - event[roc + 0] + offset) / 4
         return y + 1
+    
+
+    # endregion
+
+    @arity(0, 2, [int, float])
+    def do_test_loop(self, rate=100, duration=1):
+        """ do_triggerLoop [rate] [duration]: sends triggers with rate for duration"""
+        self.api.daqStart()
+        triggers = int(60 * duration) * rate
+        print "number of triggers:", triggers
+        for i in range(triggers):
+            t = time()
+            self.api.daqTrigger(1, 500)
+            sec = (triggers - i) / float(rate) % 60
+            min_val = (triggers - i) / rate / 60
+            print "", '\r{0:02d}:'.format(min_val), '\b{0:02d}:'.format(int(sec)), '\b{0:02.0f}'.format(
+                100 * (sec - int(sec))),
+            sys.stdout.flush()
+            while time() - t < 1. / rate:
+                sleep(.01)
+        print
+        self.api.daqStop()
+
+    def complete_test_loop(self):
+        return [self.do_test_loop.__doc__, '']
 
     @staticmethod
     def get_addresses(levels):
