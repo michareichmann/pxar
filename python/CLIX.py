@@ -1177,6 +1177,8 @@ class PxarCoreCmd(cmd.Cmd):
         print
         good = []
         for clk in xrange(20):
+            if clk in []:
+                continue
             self.set_clock(clk)
             print '{:2d}:'.format(clk),
             for phase in xrange(8):
@@ -1187,7 +1189,13 @@ class PxarCoreCmd(cmd.Cmd):
                 eff = mean([1 if ev is not None and len(ev) == n_rocs and all(header in xrange(2040, 2044) for header in ev) else 0 for ev in evts])
                 if eff == 1:
                     good.append((clk, phase))
-                print ' x ' if eff < 1 else '{g}{eff:1.1f}{e}'.format(eff=eff, g=green, e=endc),
+                    print '{c}{eff:1.1f}{e}'.format(eff=eff, c=GREEN, e=ENDC),
+                elif eff > .5:
+                    print '{c}{eff:1.1f}{e}'.format(eff=eff, c=YELLOW, e=ENDC),
+                elif eff > 0:
+                    print '{c}{eff:1.1f}{e}'.format(eff=eff, c=RED, e=ENDC),
+                else:
+                    print ' x ',
             print
         if not good:
             'Did not find any good timing...'
