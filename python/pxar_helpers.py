@@ -386,7 +386,7 @@ def PxarStartup(directory, verbosity, trim=None):
 
     hubids = [int(i) for i in config.get("hubId",31).split(',')]
     print 'HubIds set to:', hubids
-    api.initDUT(hubids, config.get("tbmType","tbm08"), tbmDACs,config.get("rocType"), rocDacs, rocPixels, rocI2C)
+    api.initDUT(hubids[0], config.get("tbmType","tbm08"), tbmDACs,config.get("rocType"), rocDacs, rocPixels, rocI2C)
 
     api.testAllPixels(True)
     print "Now enabled all pixels"
