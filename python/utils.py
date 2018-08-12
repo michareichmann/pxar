@@ -26,3 +26,15 @@ def is_num(string):
 
 def print_banner(msg, symbol='=', new_lines=True):
     print '{n}{delim}\n{msg}\n{delim}{n}'.format(delim=(len(str(msg)) + 10) * symbol, msg=msg, n='\n' if new_lines else '')
+
+
+def do_nothing():
+    pass
+
+
+def has_root():
+    try:
+        import ROOT
+        return True
+    except ImportError:
+        return False

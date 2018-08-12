@@ -1,27 +1,14 @@
 #!/usr/bin/env python2
-"""
-Simple Example Python Script Using the Pxar API.
-"""
+""" Simple Example Python Script Using the Pxar API. """
 
-
-# ==============================================
-# IMPORTS
-# ==============================================
-# region imports
 from numpy import zeros, array, mean
 from pxar_helpers import *  # arity decorator, PxarStartup, PxarConfigFile, PxarParametersFile and others
-from sys import stdout
+from sys import stdout, exit, argv
+from utils import *
 
-# Try to import ROOT:
-gui_available = True
-try:
-    import ROOT
-except ImportError:
-    gui_available = False
-    pass
+gui_available = has_root()
 if gui_available:
-    from ROOT import PyConfig, gStyle, TCanvas, gROOT, TGraph, TMultiGraph, TH1I, gRandom, TCutG, TF1
-
+    from ROOT import PyConfig, gStyle, TCanvas, gROOT, TGraph, TMultiGraph, TH1I, gRandom, TCutG, TF1, gClient
     PyConfig.IgnoreCommandLineOptions = True
     from pxar_gui import PxarGui
     from pxar_plotter import Plotter
@@ -29,24 +16,17 @@ if gui_available:
 import cmd  # for command interface and parsing
 import os  # for file system cmds
 from os.path import join
-import sys
 from time import time, sleep, strftime
 from collections import OrderedDict
 from progressbar import Bar, ETA, FileTransferSpeed, Percentage, ProgressBar
-from utils import *
 
 # set up the DAC and probe dictionaries
 dacdict = PyRegisterDictionary()
 probedict = PyProbeDictionary()
-# endregion
-
 palette = array([632, 810, 807, 797, 800, 400, 830, 827, 817, 417], 'i')
 gStyle.SetPalette(len(palette), palette)
 green = '\033[92m'
 endc = '\033[0m'
-
-def do_nothing():
-    pass
 
 
 class PxarCoreCmd(cmd.Cmd):
@@ -69,7 +49,7 @@ class PxarCoreCmd(cmd.Cmd):
         self.NRows = 80
         self.NCols = 52
         if gui and gui_available:
-            self.window = PxarGui(ROOT.gClient.GetRoot(), 800, 800)
+            self.window = PxarGui(gClient.GetRoot(), 800, 800)
         elif gui and not gui_available:
             print "No GUI available (missing ROOT library)"
 
@@ -130,7 +110,6 @@ class PxarCoreCmd(cmd.Cmd):
             x = (px.column + xoffset) if (px.roc < 8) else (415 - xoffset - px.column)
             d[x][y] += 1 if count else px.value
 
-
         plot = Plotter.create_th2(d, 0, 417 if module else 52, 0, 161 if module else 80, name, 'pixels x', 'pixels y', name)
         if no_stats:
             plot.SetStats(0)
@@ -140,7 +119,7 @@ class PxarCoreCmd(cmd.Cmd):
             for i in xrange(2):
                 for j in xrange(8):
                     rows, cols = self.NRows, self.NCols
-                    x = array([cols * j, cols * (j + 1), cols * (j + 1), cols * j, cols * j ], 'd')
+                    x = array([cols * j, cols * (j + 1), cols * (j + 1), cols * j, cols * j], 'd')
                     y = array([rows * i, rows * i, rows * (i + 1), rows * (i + 1), rows * i], 'd')
                     cut = TCutG('r{n}'.format(n=j + (j * i)), 5, x, y)
                     cut.SetLineColor(1)
@@ -205,7 +184,7 @@ class PxarCoreCmd(cmd.Cmd):
             return
         if self.window:
             return
-        self.window = PxarGui(ROOT.gClient.GetRoot(), 800, 800)
+        self.window = PxarGui(gClient.GetRoot(), 800, 800)
 
     def daq_converted_raw(self, verbose=False):
         self.api.daqStart()
@@ -448,6 +427,10 @@ class PxarCoreCmd(cmd.Cmd):
     def translate_level(level, event, roc=0):
         offset = 7
         y = level - event[roc + 1]
+        y += (event[roc + 1] - event[roc + 0] + offset) / 8
+        y /= (event[roc + 1] - event[roc + 0] + offset) / 4
+        return y + 1
+
     # endregion
 
     @arity(0, 2, [int, float])
@@ -471,10 +454,6 @@ class PxarCoreCmd(cmd.Cmd):
 
     def complete_trigger_loop(self):
         return [self.do_trigger_loop.__doc__, '']
-        y += (event[roc + 1] - event[roc + 0] + offset) / 8
-        y /= (event[roc + 1] - event[roc + 0] + offset) / 4
-        return y + 1
-    
 
     # endregion
 
@@ -926,7 +905,7 @@ class PxarCoreCmd(cmd.Cmd):
     @arity(0, 2, [int, int])
     def do_getEfficiencyMap(self, flags=0, nTriggers=10):
         """getEfficiencyMap [flags = 0] [nTriggers = 10]: returns the efficiency map"""
-        # self.window = PxarGui(ROOT.gClient.GetRoot(), 1000, 800)
+        # self.window = PxarGui(gClient.GetRoot(), 1000, 800)
         data = self.api.getEfficiencyMap(flags, nTriggers)
         self.print_eff(data, nTriggers)
         self.plot_map(data, "Efficiency", no_stats=True)
@@ -938,7 +917,7 @@ class PxarCoreCmd(cmd.Cmd):
     @arity(0, 2, [int, int])
     def do_getPulseheightMap(self, flags=0, nTriggers=10):
         """getPulseheightMap [flags = 0] [nTriggers = 10]: returns the Pulseheight map"""
-        # self.window = PxarGui(ROOT.gClient.GetRoot(), 1000, 800)
+        # self.window = PxarGui(gClient.GetRoot(), 1000, 800)
         gStyle.SetPalette(55)
         data = self.api.getPulseheightMap(flags, nTriggers)
         self.print_eff(data, nTriggers)
@@ -984,7 +963,7 @@ class PxarCoreCmd(cmd.Cmd):
         """getEfficiencyVsDACDAC [DAC1 name] [step size 1] [min 1] [max 1] [DAC2 name] [step size 2] [min 2] [max 2] [flags = 0] [nTriggers = 10]
         return: the efficiency over a 2D DAC1-DAC2 scan"""
         self.dac_dac_scan(dac1name, dac1step, dac1min, dac1max, dac2name, dac2step,
-                      dac2min, dac2max, flags, nTriggers)
+                          dac2min, dac2max, flags, nTriggers)
 
     def complete_dacDacScan(self, text, line, start_index, end_index):
         if text and len(line.split(" ")) <= 2:  # first argument and started to type
@@ -1005,7 +984,7 @@ class PxarCoreCmd(cmd.Cmd):
 
     @arity(0, 9, [int, str, int, int, int, str, int, int, int])
     def do_xdacDacScan(self, nTriggers=10, dac1name="caldel", dac1step=1, dac1min=0, dac1max=255, dac2name="vthrcomp", dac2step=1,
-                      dac2min=0, dac2max=255):
+                       dac2min=0, dac2max=255):
         """getEfficiencyVsDACDAC with unmasked ROC"""
         self.dac_dac_scan(dac1name, dac1step, dac1min, dac1max, dac2name, dac2step, dac2min, dac2max, flags=896, n_triggers=nTriggers)
 
@@ -1418,7 +1397,7 @@ class PxarCoreCmd(cmd.Cmd):
 
         # plot address levels
         self.enable_pix(5, 12)
-        self.window = PxarGui(ROOT.gClient.GetRoot(), 800, 800)
+        self.window = PxarGui(gClient.GetRoot(), 800, 800)
         plotdata = self.address_level_scan()
         plot = Plotter.create_th1(plotdata, -512, +512, "Address Levels", "ADC", "#")
         self.window.histos.append(plot)
@@ -1534,7 +1513,7 @@ class PxarCoreCmd(cmd.Cmd):
     @arity(0, 0, [])
     def do_analogLevelScan(self):
         """analogLevelScan: scan the ADC levels of an analog ROC\nTo see all six address levels it is sufficient to activate Pixel 5 12"""
-        self.window = PxarGui(ROOT.gClient.GetRoot(), 800, 800)
+        self.window = PxarGui(gClient.GetRoot(), 800, 800)
         plotdata = self.address_level_scan()
         x = 0
         for i in range(1024):
@@ -1611,7 +1590,7 @@ class PxarCoreCmd(cmd.Cmd):
 
     def complete_enableBlock(self):
         return [self.do_enableBlock.__doc__, '']
-    
+
     @arity(0, 4, [int, int, int, int])
     def do_maskFrame(self, pix=1):
         """maskFrame [pix=1] : masking outer frame with equal pixel distance"""
@@ -1660,7 +1639,6 @@ class PxarCoreCmd(cmd.Cmd):
     def complete_PixelActive(self, text, line, start_index, end_index):
         # return help for the cmd
         return [self.do_PixelActive.__doc__, '']
-
 
     @arity(0, 0, [])
     def do_findAnalogueTBDelays(self):
@@ -1726,7 +1704,7 @@ class PxarCoreCmd(cmd.Cmd):
         for value in range(start, end + 1):
             print "prints the histo for clk = " + str(value) + "..."
             self.set_clock(value)
-            self.window = PxarGui(ROOT.gClient.GetRoot(), 800, 800)
+            self.window = PxarGui(gClient.GetRoot(), 800, 800)
             plotdata = self.address_level_scan()
             plot = Plotter.create_th1(plotdata, -512, +512, "Address Levels for clk = " + str(value), "ADC", "#")
             self.window.histos.append(plot)
@@ -1793,7 +1771,7 @@ class PxarCoreCmd(cmd.Cmd):
                         data.append(px)
             for i in data:
                 print i
-            self.window = PxarGui(ROOT.gClient.GetRoot(), 1000, 800)
+            self.window = PxarGui(gClient.GetRoot(), 1000, 800)
             self.plot_map(data, "maddressDecoding")
 
     def complete_maddressDecoder(self, text, line, start_index, end_index):
@@ -1930,7 +1908,7 @@ class PxarCoreCmd(cmd.Cmd):
                         data.append(px)
                         #            for i in data:
                         #                print i
-            self.window = PxarGui(ROOT.gClient.GetRoot(), 1000, 800)
+            self.window = PxarGui(gClient.GetRoot(), 1000, 800)
             self.plot_map(data, "maddressDecoding")
 
             # time.sleep(0.1)
@@ -2068,7 +2046,7 @@ class PxarCoreCmd(cmd.Cmd):
             self.api.daqStop()
 
         if (self.window):
-            self.window = PxarGui(ROOT.gClient.GetRoot(), 1000, 800)
+            self.window = PxarGui(gClient.GetRoot(), 1000, 800)
             plot = Plotter.create_tgraph(latencyScan, "latency scan", "trigger latency", "evt/trig [%]", minlatency)
             self.window.histos.append(plot)
             self.window.update()
@@ -2253,7 +2231,7 @@ class PxarCoreCmd(cmd.Cmd):
                     t2 = time()
             elif triggers > before and triggers % 10 == 0:
                 mean = float(windowsize - 5) / windowsize * mean + float(windowsize - 95) / windowsize * 10 / (
-                    time() - t2)
+                        time() - t2)
                 print 'rate: {0:03.0f} Hz'.format(mean),
                 t2 = time()
             sys.stdout.flush()
@@ -2276,7 +2254,7 @@ class PxarCoreCmd(cmd.Cmd):
         self.api.daqStop()
 
         print "\ntest took: ", round(time() - t, 2), "s"
-        plot = Plotter.create_th2(d, 0, 417 if module else 53, 0, 161 if module else 81, "hitmap", 'pixels x',  'pixels y', "hitmap")
+        plot = Plotter.create_th2(d, 0, 417 if module else 53, 0, 161 if module else 81, "hitmap", 'pixels x', 'pixels y', "hitmap")
         self.plot_graph(plot, draw_opt='hist')
 
     def complete_hit_map(self):
@@ -2301,9 +2279,8 @@ class PxarCoreCmd(cmd.Cmd):
         return [self.do_rate.__doc__, '']
 
     @arity(0, 3, [int, int, int])
-    def do_trim_verification(self,a=0,b=52, ntrig=10):
+    def do_trim_verification(self, a=0, b=52, ntrig=10):
         start_time = time()
-
 
         vcal_thresh = zeros((53, 81))
 
@@ -2335,7 +2312,7 @@ class PxarCoreCmd(cmd.Cmd):
                 sys.stdout.flush()
             self.api.daqStop()
 
-        self.window = PxarGui(ROOT.gClient.GetRoot(), 1000, 800)
+        self.window = PxarGui(gClient.GetRoot(), 1000, 800)
         plot = Plotter.create_th2(vcal_thresh, 0, 52, 0, 80, 'trim verfication', 'col', 'row', 'thresh')
         self.window.histos.append(plot)
         self.window.update()
@@ -2344,8 +2321,6 @@ class PxarCoreCmd(cmd.Cmd):
     @arity(0, 3, [int, str, int])
     def do_ph_vs_vcal(self, average=10, name='ph.cal', do_plot=False):
         start_time = time()
-
-
 
         f = open(name, 'w')
 
@@ -2405,15 +2380,15 @@ class PxarCoreCmd(cmd.Cmd):
 
         if do_plot:
             # plot ph vs vcal
-            # self.window = PxarGui(ROOT.gClient.GetRoot(), 1000, 800)
+            # self.window = PxarGui(gClient.GetRoot(), 1000, 800)
             plot = Plotter.create_tgraph(ph_y[0][20], "ph scan", "vcal", "ph", 0, vcal_high_x)
             plot.SetMarkerSize(0.5)
             plot.SetMarkerStyle(20)
-            plot2 = Plotter.create_tgraph(ph_y[0][40],"ph scan", "vcal", "ph", 0, vcal_high_x)
+            plot2 = Plotter.create_tgraph(ph_y[0][40], "ph scan", "vcal", "ph", 0, vcal_high_x)
             plot2.SetMarkerSize(0.5)
             plot2.SetMarkerStyle(20)
             plot2.SetMarkerColor(3)
-            c1 = ROOT.TCanvas('c1', 'c1', 800, 800)
+            c1 = TCanvas('c1', 'c1', 800, 800)
             c1.DrawFrame(0, 0, 1900, 200)
             plot.Draw('P')
             plot2.Draw('P')
@@ -2846,8 +2821,8 @@ class PxarCoreCmd(cmd.Cmd):
                 string = '{c} {r}'.format(c=col, r=row)
                 if string not in pixels:
                     pixels[string] = 0
-                pixels[string] +=1
-                i +=1
+                pixels[string] += 1
+                i += 1
             i += 1
         print 'Good Headers: {p:4.1f}% ({g}/{h})'.format(p=good_headers / float(headers) * 100, g=good_headers, h=headers)
         for key, word in pixels.iteritems():
@@ -2885,13 +2860,13 @@ class PxarCoreCmd(cmd.Cmd):
         data_high = self.scan_vcal(4, ntrig)
         fac = self.find_factor(data_low, data_high)
         gr1 = Plotter.create_graph(data_low.keys(), data_low.values(), 'gr1', xtit='vcal', ytit='adc')
-        gr2 = Plotter.create_graph([key * fac for key in data_high.iterkeys()] , data_high.values(), 'gr2', xtit='vcal', ytit='adc')
+        gr2 = Plotter.create_graph([key * fac for key in data_high.iterkeys()], data_high.values(), 'gr2', xtit='vcal', ytit='adc')
         gr1.SetLineColor(3)
         gr1.SetMarkerColor(3)
         mg = TMultiGraph('mg_sv', 'ADC Calibration')
         fit = TF1('fit', '[3]*(TMath::Erf((x-[0])/[1])+[2])', 0, 2000)
         fit.SetNpx(1000)
-        fit.SetParameters(500,600,1,80)
+        fit.SetParameters(500, 600, 1, 80)
         gr2.Fit('fit')
         mg.Add(gr2)
         mg.Add(gr1)
@@ -3024,7 +2999,7 @@ class PxarCoreCmd(cmd.Cmd):
         t = time()
         values = []
         while n_events > events:
-        # while time() - t < 30:
+            # while time() - t < 30:
             event = self.converted_raw_event()
             if event is not None:
                 p.update(events + 1)
@@ -3040,7 +3015,7 @@ class PxarCoreCmd(cmd.Cmd):
 
     def complete_getTriggerPhase(self):
         return [self.do_getTriggerPhase.__doc__, '']
-    
+
     @arity(0, 5, [int, int, int, bool, int])
     def do_adc_disto(self, vcal=50, col=14, row=14, high=False, n_trig=10000):
         self.api.setDAC('ctrlreg', 4 if high else 0)
@@ -3102,7 +3077,7 @@ class PxarCoreCmd(cmd.Cmd):
     @staticmethod
     def do_quit(q=1):
         """quit: terminates the application"""
-        sys.exit(q)
+        exit(q)
 
     do_exit = do_quit
 
@@ -3128,11 +3103,11 @@ class PxarCoreCmd(cmd.Cmd):
     do_event = do_daqGetEvent
 
 
-def main(argv=None):
+def main(sysargs=None):
     prog_name = ""
-    if argv is None:
-        argv = sys.argv
-        prog_name = os.path.basename(argv.pop(0))
+    if sysargs is None:
+        sysargs = argv
+        prog_name = os.path.basename(sysargs.pop(0))
 
     # command line argument parsing
     import argparse
@@ -3143,7 +3118,7 @@ def main(argv=None):
     parser.add_argument('--run', '-r', metavar="FILE", help="Load a cmdline script to be executed before entering the prompt.")
     parser.add_argument('--verbosity', '-v', metavar="LEVEL", default="INFO", help="The output verbosity set in the pxar API.")
     parser.add_argument('--trim', '-T', nargs='?', default=None, help="The output verbosity set in the pxar API.")
-    args = parser.parse_args(argv)
+    args = parser.parse_args(sysargs)
 
     print '\n================================================='
     print '# Extended pXarCore Command Line Interface'
@@ -3162,4 +3137,4 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    exit(main())
