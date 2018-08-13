@@ -98,8 +98,6 @@ cdef class PixelConfig:
     property mask:
         def __get__(self): return self.thisptr.mask()
         def __set__(self, mask): self.thisptr.setMask(mask)
-    property triggerPhases:
-        def __get__(self): return self.thisptr.triggerPhases()
 
 
 cdef class RocConfig:
@@ -187,6 +185,8 @@ cdef class PxEvent:
     property trailer:
         def __get__(self): return self.thisptr.trailer
         def __set__(self, trailer): self.thisptr.trailer = trailer
+    property triggerPhase:
+        def __get__(self): return self.thisptr.triggerPhase()
 
 cdef class PyPxarCore:
     cdef pxarCore *thisptr # hold the C++ instance

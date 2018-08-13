@@ -1953,7 +1953,7 @@ class PxarCoreCmd(cmd.Cmd):
             while n_triggers < max_triggers:
                 try:
                     data = self.api.daqGetEvent()
-                    trigger_phases[data.triggerPhases[0]] += 1
+                    trigger_phases[data.triggerPhase] += 1
                     for roc in set([pix.roc for pix in data.pixels]):
                         yields[roc][wbc] += 1. * 100. / max_triggers
                     n_triggers += 1

@@ -34,7 +34,7 @@ cdef extern from "api.h" namespace "pxar":
         uint16_t header
         uint16_t trailer
         vector[pixel] pixels
-        vector[uint8_t] triggerPhases()
+        uint8_t triggerPhase()
         Event()
 
 cdef extern from "api.h" namespace "pxar":
