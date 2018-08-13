@@ -833,7 +833,7 @@ class PxarCoreCmd(cmd.Cmd):
     @arity(0, 0, [])
     def do_daqStart(self):
         """daqStart: starts a new DAQ session"""
-        self.api.daqStart(0)
+        self.api.daqStart()
 
     def complete_daqStart(self, text, line, start_index, end_index):
         # return help for the cmd
@@ -1009,10 +1009,10 @@ class PxarCoreCmd(cmd.Cmd):
         # return help for the cmd
         return [self.do_HVoff.__doc__, '']
 
-    @arity(1, 2, [str, int])
-    def do_daqTriggerSource(self, source, freq=0):
+    @arity(1, 1, [str, int])
+    def do_daqTriggerSource(self, source):
         """daqTriggerSource: select the trigger source to be used for the DAQ session"""
-        if self.api.daqTriggerSource(source, 40000000 / freq):
+        if self.api.daqTriggerSource(source):
             print "Trigger source \"" + source + "\" selected."
         else:
             print "DAQ returns faulty state."
