@@ -98,6 +98,8 @@ cdef class PixelConfig:
     property mask:
         def __get__(self): return self.thisptr.mask()
         def __set__(self, mask): self.thisptr.setMask(mask)
+    property triggerPhases:
+        def __get__(self): return self.thisptr.triggerPhases()
 
 
 cdef class RocConfig:
