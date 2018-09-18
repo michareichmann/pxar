@@ -1,3 +1,0 @@
-maskAllPixels 1
-testAllPixels 0
-enablePixel 14 14 

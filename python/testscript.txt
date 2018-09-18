@@ -1,3 +1,0 @@
-wbc 92
-probes
-sd 14 6

@@ -7,6 +7,7 @@ pixel-dtb-firmware/
 obj/
 analogue-pxar/
 test/
+cmake-build-debug/
 
 # root files do not belong into the repository
 *.root

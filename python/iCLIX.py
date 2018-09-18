@@ -3,17 +3,18 @@
 #       ipython command line tool using the pXar core api
 # created on February 23rd 2017 by M. Reichmann (remichae@phys.ethz.ch)
 # --------------------------------------------------------
+from sys import argv, path
+from os.path import basename, dirname, realpath, split, join
+# add python and cython libs
+pxar_dir = dirname(dirname(realpath(__file__)))
+path.insert(1, join(pxar_dir, 'lib'))
+path.insert(1, join(pxar_dir, 'python', 'src'))
 
 from ROOT import TCanvas, TCutG, gStyle, TColor, TH2F, TF2, TMultiGraph, TH1I
 from argparse import ArgumentParser
 from numpy import zeros, array, mean
-from os.path import basename, dirname, realpath, split
-from os.path import join as joinpath
-from sys import argv, path
 from time import time, sleep
 from progressbar import Bar, ETA, FileTransferSpeed, Percentage, ProgressBar
-lib_dir = joinpath(split(dirname(realpath(__file__)))[0], 'lib')
-path.insert(1, lib_dir)
 from pxar_helpers import *
 from pxar_plotter import Plotter
 from TreeWriterShort import TreeWriter
@@ -621,5 +622,4 @@ if __name__ == '__main__':
     ev = z.daq_get_event
     raw = z.daq_get_raw_event
     dt = z.daq_trigger
-    ia = z.get_tb_ia
     # sd = z.api.setDAC
