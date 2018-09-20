@@ -549,7 +549,26 @@ class CLIX:
                         print col, row, i2c
                         self.api.maskPixel(col, row, False, i2c)
 
-
+    def save_data(self):
+        t = TreeWriterLjubljana()
+        self.api.HVon()
+        self.trigger_source('extern')
+        self.set_dac('wbc', t.Config.getint('MAIN', 'wbc'))
+        self.signal_probe('a1', 'sdata2')
+        self.daq_start()
+        i = 0
+        while True:
+            try:
+                t.write(self.api.daqGetEvent())
+                print '\r{}'.format(i),
+                stdout.flush()
+                i += 1
+            except RuntimeError:
+                pass
+            except KeyboardInterrupt:
+                info('Data taking stopped by KeyboardInterrupt!')
+                break
+        self.daq_stop()
 
 
 def set_palette(custom=True, pal=1):
