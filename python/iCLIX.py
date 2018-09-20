@@ -476,12 +476,12 @@ class CLIX:
         # plot wbc_scan
         mg = TMultiGraph('mg_wbc', 'WBC Scans for all ROCs')
         colors = range(1, len(yields) + 1)
-        l = Plotter.create_legend(nentries=len(yields), x1=.7)
+        leg = Plotter.create_legend(nentries=len(yields), x1=.7)
         for i, (roc, dic) in enumerate(yields.iteritems()):
             gr = Plotter.create_graph(x=dic.keys(), y=dic.values(), tit='wbcs for roc {r}'.format(r=roc), xtit='wbc', ytit='yield [%]', color=colors[i])
-            l.AddEntry(gr, 'roc{r}'.format(r=roc), 'lp')
+            leg.AddEntry(gr, 'roc{r}'.format(r=roc), 'lp')
             mg.Add(gr, 'lp')
-        self.Plotter.plot_histo(mg, draw_opt='a', l=l)
+        self.Plotter.plot_histo(mg, draw_opt='a', l=leg)
         mg.GetXaxis().SetTitle('WBC')
         mg.GetYaxis().SetTitle('Yield [%]')
 
@@ -491,6 +491,8 @@ class CLIX:
         if random_trigger:
             self.set_pg(cal=False, res=False, delay=20)
         else:
+            self.signal_probe('a1', 'sdata2')
+            self.set_dac('wbc', 119)
             self.api.daqTriggerSource('extern')
         self.api.daqStart()
         self.start_pbar(t * 600)
@@ -500,8 +502,11 @@ class CLIX:
             if random_trigger:
                 self.api.daqTrigger(n, 500)
             try:
-                sleep(.5)
-                data += self.api.daqGetEventBuffer()
+                if random_trigger:
+                    sleep(.5)
+                    data += self.api.daqGetEventBuffer()
+                else:
+                    data += [self.api.daqGetEvent()]
             except RuntimeError:
                 pass
             except MemoryError:
@@ -523,8 +528,12 @@ class CLIX:
         stats.dump
         print 'Event Rate: {0:5.4f} MHz'.format(event_rate / 1000000)
         print 'Hit Rate:   {0:5.4f} MHz'.format(hit_rate / 1000000)
-        writer = TreeWriter(data)
-        writer.write_tree()
+
+    def hitmap_random(self, t, n=10000):
+        return self.hitmap(t, random_trigger=True, n=n)
+
+    def hitmap_trigger(self, t):
+        return self.hitmap(t, random_trigger=False)
 
     def load_mask(self, file_name):
         f = open(file_name, 'r')
