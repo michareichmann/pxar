@@ -231,6 +231,13 @@ class CLIX:
         except RuntimeError, err:
             print err
 
+    def trigger_source(self, source, freq=0):
+        """daqTriggerSource: select the trigger source to be used for the DAQ session"""
+        if self.api.daqTriggerSource(source, 40000000 / freq if freq else 0):
+            print 'Trigger source {} selected.'.format(source)
+        else:
+            print 'DAQ returns faulty state.'
+
     def trigger_loop(self, on='True', freq=100):
         """start\stop trigger loop: [on] [frequency]"""
         on = False if str(on).lower() in ['0', 'false', 'stop', 'end'] else True
