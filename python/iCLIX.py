@@ -11,14 +11,13 @@ pxar_dir = dirname(dirname(realpath(__file__)))
 path.insert(1, join(pxar_dir, 'lib'))
 path.insert(1, join(pxar_dir, 'python', 'src'))
 
-from ROOT import TCanvas, TCutG, gStyle, TColor, TH2F, TF2, TMultiGraph, TH1I
+from ROOT import TCanvas, TCutG, gStyle, TColor, TMultiGraph, TH1I
 from argparse import ArgumentParser
 from numpy import zeros, array, mean
-from time import time
+from time import time, sleep
 from progressbar import Bar, ETA, FileTransferSpeed, Percentage, ProgressBar
 from pxar_helpers import *
 from pxar_plotter import Plotter
-from TreeWriterShort import TreeWriter
 from TreeWriterLjubljana import TreeWriterLjubljana
 from utils import *
 from json import dumps
@@ -340,39 +339,7 @@ class CLIX:
         self.print_eff(data, n_triggers)
         self.plot_map(data, 'Efficiency', no_stats=True)
 
-    def hitmap(self, t=1, n=10000):
-        self.api.HVon()
-        t_start = time()
-        self.set_pg(cal=False, res=False)
-        self.api.daqStart()
-        self.start_pbar(t * 600)
-        data = []
-        while time() - t_start < t * 60:
-            self.ProgressBar.update(int((time() - t_start) * 10) + 1)
-            self.api.daqTrigger(n, 500)
-            data += self.api.daqGetEventBuffer()
-        self.ProgressBar.finish()
-        self.api.daqStop()
-        self.api.HVoff()
-        self.set_pg()
-        data = [pix for event in data for pix in event.pixels]
-        self.plot_map(data, 'Hit Map', count=True, no_stats=True)
-        stats = self.api.getStatistics()
-        event_rate = stats.valid_events / (2.5e-8 * stats.total_events / 8.)
-        hit_rate = stats.valid_pixels / (2.5e-8 * stats.total_events / 8.)
-        print stats.dump
-        print 'Event Rate: {0:5.4f} MHz'.format(event_rate / 1000000)
-        print 'Hit Rate:   {0:5.4f} MHz'.format(hit_rate / 1000000)
-
-    def test(self):
-        h = TH2F('h', 'h', 100, 0., 10., 100, 0., 10.)
-        f = TF2("xyg", "xygaus", 0, 10, 0, 10)
-        f.SetParameters(1, 5, 2, 5, 2)
-        h.FillRandom('xyg', 2000000)
-        h.Draw('colz')
-        self.Plots.append(h)
-
-    def clk_scan(self):
+    def clk_scan(self, exclude=None):
         """ scanning digital clk and deser phases """
         n = 10
         n_rocs = self.api.getNRocs()
@@ -384,7 +351,7 @@ class CLIX:
         print
         good = []
         for clk in xrange(20):
-            if clk==13:
+            if clk == exclude:
                 continue
             self.set_clock(clk)
             print '{:2d}:'.format(clk),
