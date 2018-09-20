@@ -4,29 +4,39 @@
 # created on February 20th 2017 by M. Reichmann (remichae@phys.ethz.ch)
 # --------------------------------------------------------
 
-from ROOT import TTree, TFile, vector
-from progressbar import Bar, ETA, FileTransferSpeed, Percentage, ProgressBar
-from collections import OrderedDict
-from os.path import isfile
+from ROOT import TTree, TFile
+from utils import *
+from os.path import join, dirname, realpath, basename
 
+
+type_dict = {'int32': 'I',
+             'int64': 'L'}
 
 class TreeWriter:
 
-    def __init__(self, data):
+    def __init__(self, config_name):
 
-        self.Data = data
-        self.File = None
-        self.Tree = None
-        self.VectorBranches = self.init_vector_branches()
-
-        self.RunFileName = 'runNumber.txt'
+        self.Dir = dirname(dirname(realpath(__file__)))
+        self.Config = load_config(join(self.Dir, 'config', config_name))
+        self.DataDir = self.Config.get('MAIN', 'data directory')
+        self.RunFileName = join(self.DataDir, self.Config.get('MAIN', 'run number file'))
         self.RunNumber = self.load_run_number()
+        self.FileName = self.Config.get('MAIN', 'filename')
 
-        self.ProgressBar = None
+        # init Trees and Branches
+        self.File = self.init_file()
+        self.Tree = None  # the time of creation determines the directory structure...
+        self.VectorBranches = self.init_vector_branches()
+        self.ScalarBranches = self.init_scalar_branches()
 
-    def start_pbar(self, n):
-        self.ProgressBar = ProgressBar(widgets=['Progress: ', Percentage(), ' ', Bar(marker='>'), ' ', ETA(), ' ', FileTransferSpeed()], maxval=n)
-        self.ProgressBar.start()
+        self.NEvents = 0
+
+    def __del__(self):
+        self.File.cd()
+        self.File.Write()
+        self.File.Close()
+        self.save_run_number()
+        info('Successfully saved the tree: {}'.format(basename(self.File.GetName())))
 
     def load_run_number(self):
         if isfile(self.RunFileName):
@@ -45,85 +55,33 @@ class TreeWriter:
         f.write('{n}'.format(n=self.RunNumber + 1))
         f.close()
 
+    def init_file(self):
+        ensure_dir(self.DataDir)
+        return TFile(join(self.DataDir, '{}_{}.root'.format(self.FileName, str(self.RunNumber).zfill(3))), 'RECREATE')
+
+    def init_tree(self):
+        return TTree(*[self.Config.get('TREE', 'name')] * 2)
+
+    @staticmethod
+    def init_scalar_branches():
+        return {}
+
     @staticmethod
     def init_vector_branches():
-        dic = OrderedDict([('plane', vector('unsigned short')()),
-                           ('col', vector('unsigned short')()),
-                           ('row', vector('unsigned short')()),
-                           ('adc', vector('short')()),
-                           ('header', vector('unsigned int')()),
-                           ('trailer', vector('unsigned int')()),
-                           ('pkam', vector('unsigned short')()),
-                           ('token_pass', vector('unsigned short')()),
-                           ('reset_tbm', vector('unsigned short')()),
-                           ('reset_roc', vector('unsigned short')()),
-                           ('auto_reset', vector('unsigned short')()),
-                           ('cal_trigger', vector('unsigned short')()),
-                           ('trigger_count', vector('unsigned short')()),
-                           ('trigger_phase', vector('unsigned short')()),
-                           ('stack_count', vector('unsigned short')()),
-                           ('invalid_address', vector('bool')()),
-                           ('invalid_pulse_height', vector('bool')()),
-                           ('buffer_corruption', vector('bool')()),
-                           ('incomplete_data', vector('bool')()),
-                           ('missing_roc_headers', vector('bool')()),
-                           ('roc_readback', vector('bool')()),
-                           ('no_data', vector('bool')()),
-                           ('eventid_mismatch', vector('bool')())])
-        return dic
+        return {}
 
     def clear_vectors(self):
         for key in self.VectorBranches.iterkeys():
             self.VectorBranches[key].clear()
 
     def set_branches(self):
+        for key, value in self.ScalarBranches.iteritems():
+            self.Tree.Branch(key, value, '{}/{}'.format(key, type_dict[value[0].dtype.name]))
         for key, vec in self.VectorBranches.iteritems():
             self.Tree.Branch(key, vec)
 
-    def write_tree(self, hv, cur):
-        hv_str = '-{v}'.format(v=hv) if hv is not None else ''
-        cur_str = '-{c}'.format(c=cur) if cur is not None else ''
-        self.File = TFile('run{n}{v}{c}.root'.format(n=str(self.RunNumber).zfill(3), v=hv_str, c=cur_str), 'RECREATE')
-        self.Tree = TTree('tree', 'The error tree')
-        self.set_branches()
-        self.start_pbar(len(self.Data))
-        for i, ev in enumerate(self.Data):
-            self.ProgressBar.update(i + 1)
-            self.clear_vectors()
-            for pix in ev.pixels:
-                self.VectorBranches['plane'].push_back(int(pix.roc))
-                self.VectorBranches['col'].push_back(int(pix.column))
-                self.VectorBranches['row'].push_back(int(pix.row))
-                self.VectorBranches['adc'].push_back(int(pix.value))
-                self.VectorBranches['invalid_address'].push_back(bool(pix.invalid_address))
-                self.VectorBranches['invalid_pulse_height'].push_back(bool(pix.invalid_pulse_height))
-                self.VectorBranches['buffer_corruption'].push_back(bool(pix.buffer_corruption))
-            for k in xrange(len(ev.roc_readback)):
-                self.VectorBranches['roc_readback'].push_back(ev.roc_readback[k])
-                self.VectorBranches['incomplete_data'].push_back(ev.incomplete_data[k])
-                self.VectorBranches['missing_roc_headers'].push_back(ev.missing_roc_headers[k])
-            for err in ev.eventid_mismatch:
-                self.VectorBranches['eventid_mismatch'].push_back(err)
-            for err in ev.no_data:
-                self.VectorBranches['no_data'].push_back(err)
-            for j in xrange(len(ev.header)):
-                self.VectorBranches['header'].push_back(ev.header[j])
-                self.VectorBranches['trailer'].push_back(ev.trailer[j])
-                self.VectorBranches['pkam'].push_back(ev.havePkamReset[j])
-                self.VectorBranches['cal_trigger'].push_back(ev.haveCalTrigger[j])
-                self.VectorBranches['token_pass'].push_back(ev.haveTokenPass[j])
-                self.VectorBranches['reset_tbm'].push_back(ev.haveResetTBM[j])
-                self.VectorBranches['reset_roc'].push_back(ev.haveResetROC[j])
-                self.VectorBranches['auto_reset'].push_back(ev.haveAutoReset[j])
-                self.VectorBranches['trigger_count'].push_back(ev.triggerCounts[j])
-                self.VectorBranches['trigger_phase'].push_back(ev.triggerPhases[j])
-                self.VectorBranches['stack_count'].push_back(ev.stackCounts[j])
-            self.Tree.Fill()
-        self.ProgressBar.finish()
-        self.File.cd()
-        self.File.Write()
-        self.File.Close()
-        self.save_run_number()
+    def write(self, event):
+        pass
 
 
 if __name__ == '__main__':
