@@ -7,6 +7,12 @@ from os.path import isfile, exists
 from os import makedirs, _exit
 from ConfigParser import ConfigParser
 from datetime import datetime
+from ROOT import TFile
+
+
+type_dict = {'int32': 'I',
+             'uint16': 's',
+             'int64': 'L'}
 
 
 GREEN = '\033[92m'
@@ -75,6 +81,12 @@ def has_root():
         return True
     except ImportError:
         return False
+
+
+def read_root_file(filename):
+    if file_exists(filename):
+        return TFile(filename)
+    critical('The file: "{}" does not exist...'.format(filename))
 
 
 def do(fs, pars, exe=-1):

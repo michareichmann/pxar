@@ -500,3 +500,18 @@ def make_ufloat(tup):
     if type(tup) is Variable:
         return tup
     return ufloat(tup[0], tup[1])
+
+
+def set_statbox(x=.95, y=.88, w=.16, entries=3, only_fit=False, fit=False, only_entries=False, opt=None, form=None):
+    if only_fit or fit:
+        gStyle.SetOptStat(1111 if fit else 0011)
+        gStyle.SetOptFit(1)
+    if only_entries:
+        gStyle.SetOptStat(1000000010 if not only_fit else 1000000011)
+        entries = 6 if entries == 3 else entries
+    gStyle.SetOptStat(opt) if opt is not None else do_nothing()
+    gStyle.SetFitFormat(form) if form is not None else do_nothing()
+    gStyle.SetStatX(x)
+    gStyle.SetStatY(y)
+    gStyle.SetStatW(w)
+    gStyle.SetStatH(.02 * entries)
