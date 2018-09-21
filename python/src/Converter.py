@@ -125,10 +125,9 @@ class Converter:
         self.set_branches()
         n = self.OldTree.GetEntries()
         self.start_pbar(n)
-        for i in xrange(n):
+        for i, event in enumerate(self.OldTree):
             self.clear_vectors()
-            self.OldTree.GetEntry(i)
-            x, y, adc = self.OldTree.PixX, self.OldTree.PixY, self.OldTree.Value
+            x, y, adc = event.PixX, event.PixY, event.Value
             for ix, iy, iadc in zip(x, y, adc):
                 hit = Hit(ix, iy)
                 hit.set_charge(self.get_charge(ix, iy, iadc))
