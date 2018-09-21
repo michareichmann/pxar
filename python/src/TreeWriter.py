@@ -9,9 +9,6 @@ from utils import *
 from os.path import join, dirname, realpath, basename
 
 
-type_dict = {'int32': 'I',
-             'int64': 'L'}
-
 class TreeWriter:
 
     def __init__(self, config_name):
