@@ -3,7 +3,13 @@
 
 from numpy import zeros, array, mean
 from pxar_helpers import *  # arity decorator, PxarStartup, PxarConfigFile, PxarParametersFile and others
-from sys import stdout, exit, argv
+from sys import argv, path, stdout, exit
+from os.path import join, dirname, realpath
+
+# add python and cython libs
+pxar_dir = dirname(dirname(realpath(__file__)))
+path.insert(1, join(pxar_dir, 'lib'))
+path.insert(1, join(pxar_dir, 'python', 'src'))
 from utils import *
 
 gui_available = has_root()
@@ -15,7 +21,6 @@ if gui_available:
 
 import cmd  # for command interface and parsing
 import os  # for file system cmds
-from os.path import join
 from time import time, sleep, strftime
 from collections import OrderedDict
 from progressbar import Bar, ETA, FileTransferSpeed, Percentage, ProgressBar
