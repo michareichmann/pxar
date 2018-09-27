@@ -76,7 +76,7 @@ class TreeWriterLjubljana(TreeWriter):
         for i in xrange(self.NPlanes):
             self.Trees[i].Fill()
         self.EventTree.Fill()
-	self.NEvents += 1
+        self.NEvents += 1
 
 
 if __name__ == '__main__':
