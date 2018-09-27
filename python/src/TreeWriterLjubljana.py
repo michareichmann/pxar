@@ -64,12 +64,13 @@ class TreeWriterLjubljana(TreeWriter):
         self.ScalarBranches[ev.roc]['NHits'][0] = n_hits
         self.EventBranches['TimeStamp'][0] = long(time() * 1000)
         for pix in ev.pixels:
-            self.VectorBranches[ev.roc]['PixX'].push_back(int(pix.column))
-            self.VectorBranches[ev.roc]['PixY'].push_back(int(pix.row))
-            self.VectorBranches[ev.roc]['Value'].push_back(int(pix.value))
+            self.VectorBranches[pix.roc]['PixX'].push_back(int(pix.column))
+            self.VectorBranches[pix.roc]['PixY'].push_back(int(pix.row))
+            self.VectorBranches[pix.roc]['Value'].push_back(int(pix.value))
         for i in xrange(len(ev.header)):
-            self.VectorBranches[ev.roc]['Timing'].push_back(ev.triggerPhases[i])
-            self.VectorBranches[ev.roc]['TriggerCount'].push_back(ev.triggerCounts[i])
+            for j in xrange(self.NPlanes):
+                self.VectorBranches[i]['Timing'].push_back(ev.triggerPhases[i])
+                self.VectorBranches[i]['TriggerCount'].push_back(ev.triggerCounts[i])
         for i in xrange(self.NPlanes):
             self.Trees[i].Fill()
         self.EventTree.Fill()
