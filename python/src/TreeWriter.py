@@ -20,11 +20,11 @@ class TreeWriter:
         self.RunNumber = self.load_run_number()
         self.FileName = self.Config.get('MAIN', 'filename')
 
-        self.NPlanes = self.Config.getint('Tree', 'number of planes')
+        self.NPlanes = self.Config.getint('TREE', 'number of planes')
 
         # init Trees and Branches
         self.File = self.init_file()
-        self.Tree = None  # the time of creation determines the directory structure...
+        self.Trees = None  # the time of creation determines the directory structure...
         self.VectorBranches = self.init_vector_branches()
         self.ScalarBranches = self.init_scalar_branches()
 
@@ -70,14 +70,16 @@ class TreeWriter:
         return {}
 
     def clear_vectors(self):
-        for key in self.VectorBranches.iterkeys():
-            self.VectorBranches[key].clear()
+        for i in xrange(self.NPlanes):
+            for key in self.VectorBranches[i].iterkeys():
+                self.VectorBranches[i][key].clear()
 
     def set_branches(self):
-        for key, value in self.ScalarBranches.iteritems():
-            self.Tree.Branch(key, value, '{}/{}'.format(key, type_dict[value[0].dtype.name]))
-        for key, vec in self.VectorBranches.iteritems():
-            self.Tree.Branch(key, vec)
+        for itree in xrange(self.NPlanes):
+            for key, value in self.ScalarBranches[itree].iteritems():
+                self.Trees[itree].Branch(key, value, '{}/{}'.format(key, type_dict[value[0].dtype.name]))
+            for key, vec in self.VectorBranches[itree].iteritems():
+                self.Trees[itree].Branch(key, vec)
 
     def write(self, event):
         pass

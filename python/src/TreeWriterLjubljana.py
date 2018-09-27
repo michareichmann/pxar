@@ -46,13 +46,6 @@ class TreeWriterLjubljana(TreeWriter):
                                          ('TriggerCount', vector('int')())]))
         return branches
 
-    def set_branches(self):
-        for itree in xrange(self.NPlanes):
-            for key, value in self.ScalarBranches[itree].iteritems():
-                self.Trees[itree].Branch(key, value, '{}/{}'.format(key, type_dict[value[0].dtype.name]))
-            for key, vec in self.VectorBranches[itree].iteritems():
-                self.Trees[itree].Branch(key, vec)
-
     def set_event_branches(self):
         for key, value in self.EventBranches.iteritems():
             print '{}/{}'.format(key, type_dict[value[0].dtype.name])
