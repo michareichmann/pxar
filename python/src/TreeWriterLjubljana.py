@@ -59,7 +59,6 @@ class TreeWriterLjubljana(TreeWriter):
             self.Trees.append(self.init_tree())
 
     def write(self, ev):
-        self.clear_vectors()
         self.EventBranches['TimeStamp'][0] = time() * 1000
         n_hits = zeros(self.NPlanes)
         x, y, adc = [[]] * self.NPlanes, [[]] * self.NPlanes, [[]] * self.NPlanes
