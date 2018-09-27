@@ -20,6 +20,8 @@ class TreeWriter:
         self.RunNumber = self.load_run_number()
         self.FileName = self.Config.get('MAIN', 'filename')
 
+        self.NPlanes = self.Config.getint('Tree', 'number of planes')
+
         # init Trees and Branches
         self.File = self.init_file()
         self.Tree = None  # the time of creation determines the directory structure...

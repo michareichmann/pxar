@@ -21,14 +21,9 @@ class TreeWriterLjubljana(TreeWriter):
         self.EventTree = TTree('Event', 'Event Information')
         self.EventBranches = self.init_event_branches()
 
-        self.NPlanes = self.Config.getint('Tree', 'number of planes')
-
         self.HitDirs = []
         self.Trees = []
         self.init_trees()
-
-        self.VectorBranches = self.init_vector_branches()
-        self.ScalarBranches = self.init_scalar_branches()
 
         self.set_event_branches()
         self.set_branches()
