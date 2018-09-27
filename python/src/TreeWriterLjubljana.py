@@ -38,12 +38,12 @@ class TreeWriterLjubljana(TreeWriter):
     def init_vector_branches(self):
         branches = []
         for i in xrange(self.NPlanes):
-            branches.append(OrderedDict([('Value', vector('double')()),
-                                         ('Timing', vector('double')()),
-                                         ('PixX', vector('int')()),
-                                         ('PixY', vector('int')()),
-                                         ('HitInCluster', vector('int')()),
-                                         ('TriggerCount', vector('int')())]))
+            branches.append(OrderedDict([('Value', zeros(50, 'f8')),
+                                         ('Timing', zeros(50, 'f8')),
+                                         ('PixX', zeros(50, 'i4')),
+                                         ('PixY', zeros(50, 'i4')),
+                                         ('HitInCluster', zeros(50, 'i4')),
+                                         ('TriggerCount', zeros(50, 'i4'))]))
         return branches
 
     def set_event_branches(self):
@@ -58,21 +58,24 @@ class TreeWriterLjubljana(TreeWriter):
             self.HitDirs[i].cd()
             self.Trees.append(self.init_tree())
 
-
     def write(self, ev):
         self.clear_vectors()
         self.EventBranches['TimeStamp'][0] = time() * 1000
         n_hits = zeros(self.NPlanes)
+        x, y, adc = [[]] * self.NPlanes, [[]] * self.NPlanes, [[]] * self.NPlanes
         for pix in ev.pixels:
             n_hits[pix.roc] += 1
-            self.VectorBranches[pix.roc]['PixX'].push_back(int(pix.column))
-            self.VectorBranches[pix.roc]['PixY'].push_back(int(pix.row))
-            self.VectorBranches[pix.roc]['Value'].push_back(int(pix.value))
+            x[pix.roc].append(pix.column)
+            y[pix.roc].append(pix.row)
+            adc[pix.roc].append(pix.value)
+        for i in xrange(self.NPlanes):
+            self.VectorBranches[i]['PixX'] = array(x[i], 'i4')
+            self.VectorBranches[i]['PixY'] = array(y[i], 'i4')
+            self.VectorBranches[i]['Value'] = array(adc[i], 'f8')
         for j in xrange(self.NPlanes):
             self.ScalarBranches[j]['NHits'][0] = n_hits[j]
-            for i in xrange(len(ev.header)):
-                self.VectorBranches[i]['Timing'].push_back(ev.triggerPhases[i])
-                self.VectorBranches[i]['TriggerCount'].push_back(ev.triggerCounts[i])
+            self.VectorBranches[j]['Timing'] = array([ev.triggerPhases[i] for i in xrange(len(ev.header))], 'f8')
+            self.VectorBranches[j]['TriggerCount'] = array([ev.triggerCounts[i] for i in xrange(len(ev.header))], 'i4')
         for i in xrange(self.NPlanes):
             self.Trees[i].Fill()
         self.EventTree.Fill()
