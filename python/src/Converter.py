@@ -20,7 +20,7 @@ class Converter:
     def __init__(self, filename):
 
         self.OldFile = read_root_file(filename)
-        self.OldTree = self.OldFile.Get('Plane6').Get('Hits')
+        self.OldTree = self.OldFile.Get('Plane7').Get('Hits')
         self.NewFile = self.create_new_file(filename)
         self.NewTree = self.OldTree.CloneTree(0)
 
