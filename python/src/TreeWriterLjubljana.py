@@ -30,7 +30,7 @@ class TreeWriterLjubljana(TreeWriter):
 
     @staticmethod
     def init_event_branches():
-        return OrderedDict([('TimeStamp', array([0], 'i8'))])
+        return OrderedDict([('TimeStamp', array([0], 'f8'))])
 
     def init_scalar_branches(self):
         return [OrderedDict([('NHits', array([0], 'i'))]) for _ in xrange(self.NPlanes)]
@@ -61,7 +61,7 @@ class TreeWriterLjubljana(TreeWriter):
 
     def write(self, ev):
         self.clear_vectors()
-        self.EventBranches['TimeStamp'][0] = long(time() * 1000)
+        self.EventBranches['TimeStamp'][0] = time() * 1000
         n_hits = zeros(self.NPlanes)
         for pix in ev.pixels:
             n_hits[pix.roc] += 1
