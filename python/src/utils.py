@@ -12,6 +12,7 @@ from ROOT import TFile
 
 type_dict = {'int32': 'I',
              'uint16': 's',
+             'float64': 'D',
              'int64': 'L'}
 
 
