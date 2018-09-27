@@ -53,6 +53,7 @@ class TreeWriterLjubljana(TreeWriter):
 
     def init_trees(self):
         for i in xrange(self.NPlanes):
+            self.File.cd()
             self.HitDirs.append(self.File.mkdir('Plane{}'.format(i + self.Config.getint('TREE', 'plane number'))))
             self.HitDirs[i].cd()
             self.Trees.append(self.init_tree())
@@ -75,6 +76,7 @@ class TreeWriterLjubljana(TreeWriter):
         for i in xrange(self.NPlanes):
             self.Trees[i].Fill()
         self.EventTree.Fill()
+	self.NEvents += 1
 
 
 if __name__ == '__main__':
