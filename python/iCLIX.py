@@ -5,6 +5,14 @@
 # --------------------------------------------------------
 from os.path import basename, dirname, realpath, join
 from sys import argv, path, stdout
+BREAK = False
+import sys, signal
+def signal_handler(signal, frame):
+    global BREAK
+    print("\nprogram exiting gracefully")
+    BREAK = True
+
+signal.signal(signal.SIGINT, signal_handler)
 
 # add python and cython libs
 pxar_dir = dirname(dirname(realpath(__file__)))
@@ -485,14 +493,14 @@ class CLIX:
         mg.GetXaxis().SetTitle('WBC')
         mg.GetYaxis().SetTitle('Yield [%]')
 
-    def hitmap(self, t=1, random_trigger=1, n=10000):
+    def hitmap(self, t=1, random_trigger=1, n=10000, wbc=122):
         self.api.HVon()
         t_start = time()
         if random_trigger:
             self.set_pg(cal=False, res=False, delay=20)
         else:
             self.signal_probe('a1', 'sdata2')
-            self.set_dac('wbc', 119)
+            self.set_dac('wbc', wbc)
             self.api.daqTriggerSource('extern')
         self.api.daqStart()
         self.start_pbar(t * 600)
@@ -568,6 +576,10 @@ class CLIX:
             except KeyboardInterrupt:
                 info('Data taking stopped by KeyboardInterrupt!')
                 break
+	    if BREAK:
+		break
+	    #if t.NEvents > t.Config.get('TREE', 'maximum event number'):
+	#	break
         self.daq_stop()
 
 
