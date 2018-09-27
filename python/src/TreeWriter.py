@@ -79,7 +79,7 @@ class TreeWriter:
             for key, value in self.ScalarBranches[itree].iteritems():
                 self.Trees[itree].Branch(key, value, '{}/{}'.format(key, type_dict[value[0].dtype.name]))
             for key, vec in self.VectorBranches[itree].iteritems():
-                self.Trees[itree].Branch(key, vec)
+                self.Trees[itree].Branch(key, vec, '{}/{}'.format(key, type_dict[vec[0].dtype.name]))
 
     def write(self, event):
         pass
