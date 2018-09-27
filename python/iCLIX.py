@@ -6,7 +6,7 @@
 from os.path import basename, dirname, realpath, join
 from sys import argv, path, stdout
 BREAK = False
-import sys, signal
+import signal
 def signal_handler(signal, frame):
     global BREAK
     print("\nprogram exiting gracefully")
@@ -577,11 +577,11 @@ class CLIX:
             except KeyboardInterrupt:
                 info('Data taking stopped by KeyboardInterrupt!')
                 break
-	    if BREAK:
-		break
-	    #if t.NEvents > t.Config.get('TREE', 'maximum event number'):
-	#	break
+            if BREAK:
+                break
         self.daq_stop()
+        global BREAK
+        BREAK = False
 
 
 def set_palette(custom=True, pal=1):

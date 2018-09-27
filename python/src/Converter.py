@@ -9,7 +9,7 @@ from utils import *
 from os.path import basename, join, dirname
 from argparse import ArgumentParser
 from collections import OrderedDict
-from numpy import array, average
+from numpy import array, average, zeros
 from progressbar import Bar, ETA, FileTransferSpeed, Percentage, ProgressBar
 from pickle import load, dump
 from draw import Draw, ufloat
@@ -33,7 +33,7 @@ class Converter:
                                            ('ClusterVcal', vector('float')())])
 
         # Charge Fits
-        self.FitParameters = None
+        self.FitParameters = zeros((52, 80, 4))
         self.Fit = TF1('ErFit', '[3] * (TMath::Erf((x - [0]) / [1]) + [2])', -500, 255 * 7)
         self.get_fit_data(filename)
 
