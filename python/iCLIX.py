@@ -436,10 +436,11 @@ class CLIX:
             while n_triggers < max_triggers:
                 try:
                     data = self.api.daqGetEvent()
-                    trigger_phases[data.triggerPhases[0]] += 1
-                    for roc in set([pix.roc for pix in data.pixels]):
-                        yields[roc][wbc] += 1. * 100. / max_triggers
-                    n_triggers += 1
+                    if data.header:
+                        trigger_phases[data.triggerPhases[0]] += 1
+                        for roc in set([pix.roc for pix in data.pixels]):
+                            yields[roc][wbc] += 1. * 100. / max_triggers
+                        n_triggers += 1
                 except RuntimeError:
                     pass
             y_strings = ['{y:5.1f}%'.format(y=yld) for yld in [yields[roc][wbc] for roc in yields.iterkeys()]]
