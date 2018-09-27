@@ -8,7 +8,7 @@ from ROOT import vector
 from collections import OrderedDict
 from TreeWriter import *
 from time import time
-from numpy import array
+from numpy import array, zeros
 
 
 class TreeWriterLjubljana(TreeWriter):
@@ -60,15 +60,16 @@ class TreeWriterLjubljana(TreeWriter):
 
     def write(self, ev):
         self.clear_vectors()
-        n_hits = int(len(ev.pixels))
-        self.ScalarBranches[ev.roc]['NHits'][0] = n_hits
         self.EventBranches['TimeStamp'][0] = long(time() * 1000)
+        n_hits = zeros(self.NPlanes)
         for pix in ev.pixels:
+            n_hits[pix.roc] += 1
             self.VectorBranches[pix.roc]['PixX'].push_back(int(pix.column))
             self.VectorBranches[pix.roc]['PixY'].push_back(int(pix.row))
             self.VectorBranches[pix.roc]['Value'].push_back(int(pix.value))
-        for i in xrange(len(ev.header)):
-            for j in xrange(self.NPlanes):
+        for j in xrange(self.NPlanes):
+            self.ScalarBranches[j]['NHits'][0] = n_hits[j]
+            for i in xrange(len(ev.header)):
                 self.VectorBranches[i]['Timing'].push_back(ev.triggerPhases[i])
                 self.VectorBranches[i]['TriggerCount'].push_back(ev.triggerCounts[i])
         for i in xrange(self.NPlanes):
