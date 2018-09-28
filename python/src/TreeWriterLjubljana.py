@@ -48,7 +48,6 @@ class TreeWriterLjubljana(TreeWriter):
 
     def set_event_branches(self):
         for key, value in self.EventBranches.iteritems():
-            print '{}/{}'.format(key, type_dict[value[0].dtype.name])
             self.EventTree.Branch(key, value, '{}/{}'.format(key, type_dict[value[0].dtype.name]))
 
     def init_trees(self):
