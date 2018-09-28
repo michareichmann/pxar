@@ -494,7 +494,7 @@ class CLIX:
         mg.GetXaxis().SetTitle('WBC')
         mg.GetYaxis().SetTitle('Yield [%]')
 
-    def hitmap(self, t=1, random_trigger=1, n=10000, wbc=122):
+    def hitmap(self, t=1, random_trigger=1, n=10000, wbc=123):
         self.api.HVon()
         t_start = time()
         if random_trigger:
@@ -538,10 +538,10 @@ class CLIX:
         print 'Event Rate: {0:5.4f} MHz'.format(event_rate / 1000000)
         print 'Hit Rate:   {0:5.4f} MHz'.format(hit_rate / 1000000)
 
-    def hitmap_random(self, t, n=10000):
+    def hitmap_random(self, t, n=10000, wbc=123):
         return self.hitmap(t, random_trigger=True, n=n)
 
-    def hitmap_trigger(self, t):
+    def hitmap_trigger(self, t, wbc=123):
         return self.hitmap(t, random_trigger=False)
 
     def load_mask(self, file_name):
