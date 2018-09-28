@@ -559,6 +559,7 @@ class CLIX:
                         self.api.maskPixel(col, row, False, i2c)
 
     def save_data(self):
+        global BREAK
         t = TreeWriterLjubljana()
         self.api.HVon()
         self.trigger_source('extern')
@@ -580,7 +581,6 @@ class CLIX:
             if BREAK:
                 break
         self.daq_stop()
-        global BREAK
         BREAK = False
 
 
