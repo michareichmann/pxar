@@ -36,14 +36,15 @@ class TreeWriterLjubljana(TreeWriter):
         return [OrderedDict([('NHits', array([0], 'i'))]) for _ in xrange(self.NPlanes)]
 
     def init_vector_branches(self):
+        n = 500
         branches = []
         for i in xrange(self.NPlanes):
-            branches.append(OrderedDict([('Value', zeros(50, 'f8')),
-                                         ('Timing', zeros(50, 'f8')),
-                                         ('PixX', zeros(50, 'i4')),
-                                         ('PixY', zeros(50, 'i4')),
-                                         ('HitInCluster', zeros(50, 'i4')),
-                                         ('TriggerCount', zeros(50, 'i4'))]))
+            branches.append(OrderedDict([('Value', zeros(n, 'f8')),
+                                         ('Timing', zeros(n, 'f8')),
+                                         ('PixX', zeros(n, 'i4')),
+                                         ('PixY', zeros(n, 'i4')),
+                                         ('HitInCluster', zeros(n, 'i4')),
+                                         ('TriggerCount', zeros(n, 'i4'))]))
         return branches
 
     def set_event_branches(self):
