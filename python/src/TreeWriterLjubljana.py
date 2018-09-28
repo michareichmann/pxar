@@ -71,9 +71,10 @@ class TreeWriterLjubljana(TreeWriter):
             self.VectorBranches[j]['Timing'] = array([ev.triggerPhases[i] for i in xrange(len(ev.header))], 'f8')
             self.VectorBranches[j]['TriggerCount'] = array([ev.triggerCounts[i] for i in xrange(len(ev.header))], 'i4')
         for i in xrange(self.NPlanes):
-            self.VectorBranches[i]['PixX'] = array(x[i], 'i4')
-            self.VectorBranches[i]['PixY'] = array(y[i], 'i4')
-            self.VectorBranches[i]['Value'] = array(adc[i], 'f8')
+            for j in xrange(n_hits[i]):
+                self.VectorBranches[i]['PixX'][j] = x[i][j]
+                self.VectorBranches[i]['PixY'][j] = y[i][j]
+                self.VectorBranches[i]['Value'][j] = adc[i][j]
         for i in xrange(self.NPlanes):
             self.Trees[i].Fill()
         self.EventTree.Fill()

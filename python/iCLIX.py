@@ -561,6 +561,7 @@ class CLIX:
     def save_data(self):
         global BREAK
         t = TreeWriterLjubljana()
+        info('START DATA ACQUISITION FOR RUN {}'.format(t.RunNumber))
         self.api.HVon()
         self.trigger_source('extern')
         self.set_dac('wbc', t.Config.getint('MAIN', 'wbc'))
