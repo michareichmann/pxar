@@ -583,6 +583,8 @@ class CLIX:
                 break
         self.daq_stop()
         BREAK = False
+        t.copy_file()
+
 
 
 def set_palette(custom=True, pal=1):
