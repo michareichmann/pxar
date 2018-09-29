@@ -70,8 +70,8 @@ class TreeWriterLjubljana(TreeWriter):
     def copy_file(self):
         nrs = [name.strip('.root').split('_')[-1] for name in glob(join(self.DataDir, 'run*'))]
         last_nr = max(int(nr) for nr in nrs if nr)
-        copy(self.File.GetName(), join(self.DataDir, 'run_.root'.format(last_nr + 1)))
-        info('copied {} to {}'.format(self.File.GetName(), join(self.DataDir, 'run_.root'.format(last_nr + 1))))
+        copy(self.File.GetName(), join(self.DataDir, 'run_{}.root'.format(last_nr + 1)))
+        info('copied {} to {}'.format(self.File.GetName(), join(self.DataDir, 'run_{}.root'.format(last_nr + 1))))
 
     def write(self, ev):
         self.EventBranches['TimeStamp'][0] = time() * 1000
