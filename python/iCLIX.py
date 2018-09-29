@@ -4,6 +4,7 @@
 # created on February 23rd 2017 by M. Reichmann (remichae@phys.ethz.ch)
 # --------------------------------------------------------
 from os.path import basename, dirname, realpath, join
+from os import system
 from sys import argv, path, stdout
 BREAK = False
 import signal
@@ -558,7 +559,7 @@ class CLIX:
                         print col, row, i2c
                         self.api.maskPixel(col, row, False, i2c)
 
-    def save_data(self):
+    def save_data(self, n=250000):
         global BREAK
         t = TreeWriterLjubljana()
         info('START DATA ACQUISITION FOR RUN {}'.format(t.RunNumber))
@@ -574,11 +575,10 @@ class CLIX:
                 print '\r{}'.format(i),
                 stdout.flush()
                 i += 1
+                if i == n:
+                    system('ssh -tY f9pc /home/f9pc001/Downloads/say.py "you_collected_250000_events_for_run_{}"'.format(t.RunNumber))
             except RuntimeError:
                 pass
-            except KeyboardInterrupt:
-                info('Data taking stopped by KeyboardInterrupt!')
-                break
             if BREAK:
                 break
         self.daq_stop()
