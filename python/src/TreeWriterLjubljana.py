@@ -4,11 +4,12 @@
 # created on February 20th 2017 by M. Reichmann (remichae@phys.ethz.ch)
 # --------------------------------------------------------
 
-from ROOT import vector
 from collections import OrderedDict
 from TreeWriter import *
 from time import time
 from numpy import array, zeros
+from glob import glob
+from shutil import copy
 
 
 class TreeWriterLjubljana(TreeWriter):
@@ -66,6 +67,10 @@ class TreeWriterLjubljana(TreeWriter):
                 array_size = '1' if key in ['Timing', 'TriggerCount'] else 'NHits'
                 self.Trees[itree].Branch(key, vec, '{key}[{n}]/{type}'.format(key=key, n=array_size, type=type_dict[vec[0].dtype.name]))
 
+    def copy_file(self):
+        last_nr = max(int(name.strip('.root').split('_')[-1]) for name in glob(join(self.DataDir, 'run*')))
+        copy(self.File.GetName(), join(self.DataDir, 'run_.root'.format(last_nr + 1)))
+
     def write(self, ev):
         self.EventBranches['TimeStamp'][0] = time() * 1000
         n_hits = zeros(self.NPlanes, 'i')
@@ -90,4 +95,4 @@ class TreeWriterLjubljana(TreeWriter):
 
 
 if __name__ == '__main__':
-    z = TreeWriter(None)
+    z = TreeWriter('')
