@@ -69,7 +69,7 @@ class TreeWriterLjubljana(TreeWriter):
     def write(self, ev):
         self.EventBranches['TimeStamp'][0] = time() * 1000
         n_hits = zeros(self.NPlanes, 'i')
-        x, y, adc = [[]] * self.NPlanes, [[]] * self.NPlanes, [[]] * self.NPlanes
+        x, y, adc = [[] for _ in self.NPlanes], [[] for _ in self.NPlanes], [[] for _ in self.NPlanes]
         for pix in ev.pixels:
             n_hits[pix.roc] += 1
             x[pix.roc].append(pix.column)
