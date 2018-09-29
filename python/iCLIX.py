@@ -576,7 +576,7 @@ class CLIX:
                 stdout.flush()
                 i += 1
                 if i == n:
-                    system('ssh -tY f9pc /home/f9pc001/Downloads/say.py "you_collected_250000_events_for_run_{}"'.format(t.RunNumber))
+                    system('ssh -tY f9pc /home/f9pc001/Downloads/say.py "you_collected_{}_events_for_run_{}"'.format(n, t.RunNumber))
             except RuntimeError:
                 pass
             if BREAK:
