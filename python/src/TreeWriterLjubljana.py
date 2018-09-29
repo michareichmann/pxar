@@ -96,4 +96,4 @@ class TreeWriterLjubljana(TreeWriter):
 
 
 if __name__ == '__main__':
-    z = TreeWriter('')
+    z = TreeWriter('ljutel')
