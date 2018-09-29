@@ -36,7 +36,7 @@ class TreeWriterLjubljana(TreeWriter):
         return [OrderedDict([('NHits', array([0], 'i'))]) for _ in xrange(self.NPlanes)]
 
     def init_vector_branches(self):
-        n = 500
+        n = 5000
         branches = []
         for i in xrange(self.NPlanes):
             branches.append(OrderedDict([('Value', zeros(n, 'f8')),
