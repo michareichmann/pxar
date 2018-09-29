@@ -39,19 +39,19 @@ class ReadData(Draw):
         self.format_histo(h, x_tit='Column', y_tit='Row', z_tit='Number of Entries', y_off=1.2, z_off=1.5, stats=0)
         self.draw_histo(h, draw_opt='colz', rm=.18)
 
-    def draw_adc_map(self):
-        h = TProfile2D('pam', 'ADC Map', 52, .5, 52.5, 80, .5, 80.5)
+    def draw_charge_map(self):
+        h = TProfile2D('pam', 'Charge Map', 52, .5, 52.5, 80, .5, 80.5)
         self.Tree.Draw('Value:PixY:PixX>>pam', '', 'goff')
         self.format_statbox(only_entries=1, x=.78)
-        self.format_histo(h, x_tit='Column', y_tit='Row', z_tit='ADC', y_off=1.2, z_off=1.5)
+        self.format_histo(h, x_tit='Column', y_tit='Row', z_tit='VCAL', y_off=1.2, z_off=1.5)
         self.draw_histo(h, draw_opt='colz', rm=.18)
 
     def draw_charge_distribution(self, vcal=True, cut=''):
-        h = TH1I('had', 'ADC Distribution', 3756, -256, 3500)
+        h = TH1I('had', 'ADC Distribution', 3756 / 2, -256, 3500)
         self.Tree.Draw('{}>>had'.format('ClusterVcal' if vcal else ''), TCut(cut), 'goff')
         self.format_statbox(only_entries=1)
         x_range = [h.GetBinCenter(i) for i in [h.FindFirstBinAbove(0) - 1, h.FindLastBinAbove(0) + 1]]
-        self.format_histo(h, x_tit='ADC', y_tit='Number of Entries', y_off=1.2, x_range=x_range)
+        self.format_histo(h, x_tit='VCAL', y_tit='Number of Entries', y_off=1.2, x_range=x_range)
         self.draw_histo(h)
 
     def draw_cluster_size(self):
@@ -59,33 +59,6 @@ class ReadData(Draw):
         self.Tree.Draw('ClusterSize>>hcs', '', 'goff')
         self.format_histo(h, x_tit='Cluster Size', y_tit='Number of Entries', y_off=1.2, stats=0)
         self.draw_histo(h)
-
-    # def draw_vcal_distribution(self):
-    #     h = TH1F('h_vcal', 'vcal Distribution', int((1350 * 47) / 500), -100, 1250)
-    #     n = self.Tree.Draw('Value:PixY:PixX:Entry$', '', 'goff')
-    #     last_entry = 0
-    #     last_bad = False
-    #     vcal = []
-    #     for i in xrange(n):
-    #         adc = self.Tree.GetV1()[i]
-    #         row = int(self.Tree.GetV2()[i])
-    #         col = int(self.Tree.GetV3()[i])
-    #         entry = int(self.Tree.GetV3()[i])
-    #         if col == adc == row == 0:
-    #             if last_bad:
-    #                 break
-    #             last_bad = True
-    #         else:
-    #             last_bad = False
-    #         if entry != last_entry:
-    #             h.Fill(sum(vcal))
-    #             vcal = []
-    #         self.Fit.SetParameters(*self.FitParameters[col][row])
-    #         vcal.append(self.Fit.GetX(adc))
-    #         last_entry = entry
-    #     self.format_histo(h, x_tit='vcal', y_tit='Number of Entries', y_off=1.4, fill_color=self.FillColor)
-    #     self.draw_histo(h, lm=0.13)
-    #     return h
 
     def get_calibration_data(self, filename):
         pickle_name = 'fitpars.pickle'
