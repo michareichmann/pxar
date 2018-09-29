@@ -68,7 +68,8 @@ class TreeWriterLjubljana(TreeWriter):
                 self.Trees[itree].Branch(key, vec, '{key}[{n}]/{type}'.format(key=key, n=array_size, type=type_dict[vec[0].dtype.name]))
 
     def copy_file(self):
-        last_nr = max(int(name.strip('.root').split('_')[-1]) for name in glob(join(self.DataDir, 'run*')))
+        nrs = [name.strip('.root').split('_')[-1] for name in glob(join(self.DataDir, 'run*'))]
+        last_nr = max(int(nr) for nr in nrs if nr)
         copy(self.File.GetName(), join(self.DataDir, 'run_.root'.format(last_nr + 1)))
         info('copied {} to {}'.format(self.File.GetName(), join(self.DataDir, 'run_.root'.format(last_nr + 1))))
 
