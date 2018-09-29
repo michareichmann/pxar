@@ -58,6 +58,14 @@ class TreeWriterLjubljana(TreeWriter):
             self.HitDirs[i].cd()
             self.Trees.append(self.init_tree())
 
+    def set_branches(self):
+        for itree in xrange(self.NPlanes):
+            for key, value in self.ScalarBranches[itree].iteritems():
+                self.Trees[itree].Branch(key, value, '{}/{}'.format(key, type_dict[value[0].dtype.name]))
+            for key, vec in self.VectorBranches[itree].iteritems():
+                array_size = '1' if key in ['Timing', 'TriggerCount'] else 'NHits'
+                self.Trees[itree].Branch(key, vec, '{key}[{n}]/{type}'.format(key=key, n=array_size, type=type_dict[vec[0].dtype.name]))
+
     def write(self, ev):
         self.EventBranches['TimeStamp'][0] = time() * 1000
         n_hits = zeros(self.NPlanes, 'i')
@@ -67,16 +75,15 @@ class TreeWriterLjubljana(TreeWriter):
             x[pix.roc].append(pix.column)
             y[pix.roc].append(pix.row)
             adc[pix.roc].append(pix.value)
-        for j in xrange(self.NPlanes):
-            self.ScalarBranches[j]['NHits'][0] = n_hits[j]
-            self.VectorBranches[j]['Timing'] = array([ev.triggerPhases[i] for i in xrange(len(ev.header))], 'f8')
-            self.VectorBranches[j]['TriggerCount'] = array([ev.triggerCounts[i] for i in xrange(len(ev.header))], 'i4')
         for i in xrange(self.NPlanes):
+            self.ScalarBranches[i]['NHits'][0] = n_hits[i]
+            for j in xrange(len(ev.header)):
+                self.VectorBranches[i]['Timing'][j] = ev.triggerPhases[j]
+                self.VectorBranches[i]['TriggerCount'][j] = ev.triggerCounts[j]
             for j in xrange(n_hits[i]):
                 self.VectorBranches[i]['PixX'][j] = x[i][j]
                 self.VectorBranches[i]['PixY'][j] = y[i][j]
                 self.VectorBranches[i]['Value'][j] = adc[i][j]
-        for i in xrange(self.NPlanes):
             self.Trees[i].Fill()
         self.EventTree.Fill()
         self.NEvents += 1
