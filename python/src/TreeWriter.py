@@ -7,6 +7,7 @@
 from ROOT import TTree, TFile
 from utils import *
 from os.path import join, dirname, realpath, basename
+from time import sleep
 
 
 class TreeWriter:
@@ -36,6 +37,9 @@ class TreeWriter:
         self.File.Close()
         self.save_run_number()
         info('Successfully saved the tree: {}'.format(basename(self.File.GetName())))
+        sleep(.1)
+        self.copy_file()
+
 
     def load_run_number(self):
         if isfile(self.RunFileName):
@@ -82,6 +86,9 @@ class TreeWriter:
                 self.Trees[itree].Branch(key, vec, '{}[NHits]/{}'.format(key, type_dict[vec[0].dtype.name]))
 
     def write(self, event):
+        pass
+
+    def copy_file(self):
         pass
 
 
