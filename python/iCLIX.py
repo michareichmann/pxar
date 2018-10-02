@@ -4,7 +4,7 @@
 # created on February 23rd 2017 by M. Reichmann (remichae@phys.ethz.ch)
 # --------------------------------------------------------
 from os.path import basename, dirname, realpath, join
-from os import system
+from subprocess import call
 from sys import argv, path, stdout
 BREAK = False
 import signal
@@ -559,7 +559,7 @@ class CLIX:
                         print col, row, i2c
                         self.api.maskPixel(col, row, False, i2c)
 
-    def save_data(self, n=250000):
+    def save_data(self, n=240000):
         global BREAK
         t = TreeWriterLjubljana()
         info('START DATA ACQUISITION FOR RUN {}'.format(t.RunNumber))
@@ -576,7 +576,7 @@ class CLIX:
                 stdout.flush()
                 i += 1
                 if i == n:
-                    system('ssh -tY f9pc /home/f9pc001/Downloads/say.py "you_collected_{}_events_for_run_{}"'.format(n, t.RunNumber))
+                    call('ssh -tY f9pc DISPLAY=:0 /home/f9pc001/miniconda2/bin/python /home/f9pc001/Downloads/run/say.py'.split() + ['"finished run {}"'.format(t.RunNumber)])
             except RuntimeError:
                 pass
             if BREAK:
