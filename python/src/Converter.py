@@ -21,11 +21,13 @@ class Converter:
 
         self.OldFile = read_root_file(filename)
         self.OldTree = self.OldFile.Get('Plane7').Get('Hits')
+        self.EventTree = self.OldFile.Get('Event')
         self.NewFile = self.create_new_file(filename)
         self.NewTree = self.OldTree.CloneTree(0)
 
         # New Branches
-        self.ScalarBranches = OrderedDict([('NCluster', array([0], 'u2'))])
+        self.ScalarBranches = OrderedDict([('NCluster', array([0], 'u2')),
+                                           ('TimeStamp', array([0], 'f8'))])
         self.VectorBranches = OrderedDict([('VCal', vector('float')()),
                                            ('ClusterSize', vector('unsigned short')()),
                                            ('ClusterX', vector('float')()),
@@ -116,7 +118,7 @@ class Converter:
         for ihit in self.Hits:
             if ihit in self.ClusteredHits:
                 continue
-            if abs(ihit.X - hit.X) <= 2 and abs(ihit.Y - hit.Y) <= 2:
+            if abs(ihit.X - hit.X) <= 1 and abs(ihit.Y - hit.Y) <= 1:
                 cluster.add_hit(ihit)
                 self.ClusteredHits.append(ihit)
                 self.add_touching_hits(cluster, ihit)
@@ -126,6 +128,7 @@ class Converter:
         n = self.OldTree.GetEntries()
         self.start_pbar(n)
         for i, event in enumerate(self.OldTree):
+            self.EventTree.GetEntry(i)
             self.clear_vectors()
             x, y, adc = event.PixX, event.PixY, event.Value
             for ix, iy, iadc in zip(x, y, adc):
@@ -135,6 +138,7 @@ class Converter:
                 self.Hits.append(hit)
             self.clusterise()
             self.ScalarBranches['NCluster'][0] = len(self.Clusters)
+            self.ScalarBranches['TimeStamp'][0] = self.EventTree.TimeStamp
             for cluster in self.Clusters:
                 self.VectorBranches['ClusterSize'].push_back(cluster.size())
                 self.VectorBranches['ClusterX'].push_back(cluster.x())
