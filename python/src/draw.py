@@ -515,3 +515,9 @@ def set_statbox(x=.95, y=.88, w=.16, entries=3, only_fit=False, fit=False, only_
     gStyle.SetStatY(y)
     gStyle.SetStatW(w)
     gStyle.SetStatH(.02 * entries)
+
+
+def set_z_range(zmin, zmax):
+    c = get_last_canvas()
+    h = c.GetListOfPrimitives()[1]
+    h.GetZaxis().SetRangeUser(zmin, zmax)
