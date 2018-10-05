@@ -26,9 +26,9 @@ def get_t_str():
     return datetime.now().strftime('%H:%M:%S')
 
 
-def info(msg, prnt=True):
+def info(msg, overlay=False, prnt=True):
     if prnt:
-        print '{head} {t} --> {msg}'.format(t=get_t_str(), msg=msg, head='{}INFO:{}'.format(GREEN, ENDC))
+        print '{ov}{head} {t} --> {msg}'.format(t=get_t_str(), msg=msg, head='{}INFO:{}'.format(GREEN, ENDC), ov='\033[1A\r' if overlay else '')
 
 
 def warning(msg):
