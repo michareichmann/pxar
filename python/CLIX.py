@@ -1991,16 +1991,16 @@ class PxarCoreCmd(cmd.Cmd):
                 print '{i}\t{d} {v:2.1f}%'.format(i=i, d=int(round(percentage)) * '|', v=percentage)
 
         # plot wbc_scan
-        mg = TMultiGraph('mg_wbc', 'WBC Scans for all ROCs')
-        colors = range(1, len(yields) + 1)
-        l = Plotter.create_legend(nentries=len(yields), x1=.7)
-        for i, (roc, dic) in enumerate(yields.iteritems()):
-            gr = Plotter.create_graph(x=dic.keys(), y=dic.values(), tit='wbcs for roc {r}'.format(r=roc), xtit='wbc', ytit='yield [%]', color=colors[i])
-            l.AddEntry(gr, 'roc{r}'.format(r=roc), 'lp')
-            mg.Add(gr, 'lp')
-        self.Plotter.plot_histo(mg, draw_opt='a', l=l)
-        mg.GetXaxis().SetTitle('WBC')
-        mg.GetYaxis().SetTitle('Yield [%]')
+        #mg = TMultiGraph('mg_wbc', 'WBC Scans for all ROCs')
+        #colors = range(1, len(yields) + 1)
+        #l = Plotter.create_legend(nentries=len(yields), x1=.7)
+        #for i, (roc, dic) in enumerate(yields.iteritems()):
+        #    gr = Plotter.create_graph(x=dic.keys(), y=dic.values(), tit='wbcs for roc {r}'.format(r=roc), xtit='wbc', ytit='yield [%]', color=colors[i])
+        #    l.AddEntry(gr, 'roc{r}'.format(r=roc), 'lp')
+        #    mg.Add(gr, 'lp')
+        #self.Plotter.plot_histo(mg, draw_opt='a', l=l)
+        #mg.GetXaxis().SetTitle('WBC')
+        #mg.GetYaxis().SetTitle('Yield [%]')
 
     def complete_wbcScan(self):
         # return help for the cmd
