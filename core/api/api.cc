@@ -92,6 +92,8 @@ void pxarCore::setTestboardDelays(std::vector<std::pair<std::string,uint8_t> > s
 
 void pxarCore::setDecodingOffset(uint8_t offset) { _hal->setOffset(offset); }
 
+void pxarCore::setDecodingThresholds(std::vector<std::vector<float> > values) { _hal->setDecodingThresholds(values); }
+
 void pxarCore::setPatternGenerator(std::vector<std::pair<std::string,uint8_t> > pg_setup) {
   if(!_hal->status()) {
     LOG(logERROR) << "Pattern generator not updated!";

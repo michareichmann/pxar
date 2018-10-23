@@ -190,6 +190,10 @@ namespace pxar {
     std::vector<size_t> slidingWindow;
     uint8_t offsetB;
 
+    /** Fixed level thresholds */
+    bool hasThresholds;
+    std::vector<std::vector<float> > thresholds;
+
     // Last DAC storage for analog ROCs:
     void evalLastDAC(uint8_t roc, uint16_t val);
 
@@ -198,7 +202,7 @@ namespace pxar {
     std::vector<std::string> event_ringbuffer;
 
   public:
-  dtbEventDecoder() : decodingStats(), readback_dirty(), count(), shiftReg(), readback(), eventID(-1), offsetB(0), total_event(5), flawed_event(0),
+  dtbEventDecoder() : decodingStats(), readback_dirty(), count(), shiftReg(), readback(), eventID(-1), offsetB(0), hasThresholds(false), total_event(5), flawed_event(0),
                       error_count(0), dump_count(0), event_ringbuffer(7) {
 
     /** initialise vectors */
@@ -209,6 +213,7 @@ namespace pxar {
   };
     void Clear() { decodingStats.clear(); readback.clear(); count.clear(); shiftReg.clear(); eventID = -1; };
     void setOffset(uint8_t decodingOffset) { offsetB = decodingOffset; }
+    void setThresholds(const std::vector<std::vector<float> > values) { thresholds = values; hasThresholds = bool(!values.empty()); }
     void clearErrors() { roc_Event.clearPixelErrors(); }
     bool foundHeader(int16_t, int16_t, int16_t);
 

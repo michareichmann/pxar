@@ -197,6 +197,7 @@ int main(int argc, char *argv[]){
 
     LOG(logINFO) << "Setting analogue decoding offset to " << int(configParameters->getDecodingOffset());
     api->setDecodingOffset(configParameters->getDecodingOffset());
+    api->setDecodingThresholds(configParameters->getDecodingThresholds());
 
     LOG(logINFO) << "Switching to external clock";
     api->setExternalClock(1);

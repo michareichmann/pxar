@@ -3,20 +3,31 @@
 #       ipython command line tool using the pXar core api
 # created on February 23rd 2017 by M. Reichmann (remichae@phys.ethz.ch)
 # --------------------------------------------------------
+from os.path import basename, dirname, realpath, join
+from subprocess import call
+from sys import argv, path, stdout
+BREAK = False
+import signal
+def signal_handler(signal, frame):
+    global BREAK
+    print("\nprogram exiting gracefully")
+    BREAK = True
 
-from ROOT import TCanvas, TCutG, gStyle, TColor, TH2F, TF2, TMultiGraph, TH1I
+signal.signal(signal.SIGINT, signal_handler)
+
+# add python and cython libs
+pxar_dir = dirname(dirname(realpath(__file__)))
+path.insert(1, join(pxar_dir, 'lib'))
+path.insert(1, join(pxar_dir, 'python', 'src'))
+
+from ROOT import TCanvas, TCutG, gStyle, TColor, TMultiGraph, TH1I
 from argparse import ArgumentParser
 from numpy import zeros, array, mean
-from os.path import basename, dirname, realpath, split
-from os.path import join as joinpath
-from sys import argv, path
 from time import time, sleep
 from progressbar import Bar, ETA, FileTransferSpeed, Percentage, ProgressBar
-lib_dir = joinpath(split(dirname(realpath(__file__)))[0], 'lib')
-path.insert(1, lib_dir)
 from pxar_helpers import *
 from pxar_plotter import Plotter
-from TreeWriterShort import TreeWriter
+from TreeWriterLjubljana import TreeWriterLjubljana
 from utils import *
 from json import dumps
 
@@ -228,6 +239,13 @@ class CLIX:
         except RuntimeError, err:
             print err
 
+    def trigger_source(self, source, freq=0):
+        """daqTriggerSource: select the trigger source to be used for the DAQ session"""
+        if self.api.daqTriggerSource(source, 40000000 / freq if freq else 0):
+            print 'Trigger source {} selected.'.format(source)
+        else:
+            print 'DAQ returns faulty state.'
+
     def trigger_loop(self, on='True', freq=100):
         """start\stop trigger loop: [on] [frequency]"""
         on = False if str(on).lower() in ['0', 'false', 'stop', 'end'] else True
@@ -330,39 +348,7 @@ class CLIX:
         self.print_eff(data, n_triggers)
         self.plot_map(data, 'Efficiency', no_stats=True)
 
-    def hitmap(self, t=1, n=10000):
-        self.api.HVon()
-        t_start = time()
-        self.set_pg(cal=False, res=False)
-        self.api.daqStart()
-        self.start_pbar(t * 600)
-        data = []
-        while time() - t_start < t * 60:
-            self.ProgressBar.update(int((time() - t_start) * 10) + 1)
-            self.api.daqTrigger(n, 500)
-            data += self.api.daqGetEventBuffer()
-        self.ProgressBar.finish()
-        self.api.daqStop()
-        self.api.HVoff()
-        self.set_pg()
-        data = [pix for event in data for pix in event.pixels]
-        self.plot_map(data, 'Hit Map', count=True, no_stats=True)
-        stats = self.api.getStatistics()
-        event_rate = stats.valid_events / (2.5e-8 * stats.total_events / 8.)
-        hit_rate = stats.valid_pixels / (2.5e-8 * stats.total_events / 8.)
-        print stats.dump
-        print 'Event Rate: {0:5.4f} MHz'.format(event_rate / 1000000)
-        print 'Hit Rate:   {0:5.4f} MHz'.format(hit_rate / 1000000)
-
-    def test(self):
-        h = TH2F('h', 'h', 100, 0., 10., 100, 0., 10.)
-        f = TF2("xyg", "xygaus", 0, 10, 0, 10)
-        f.SetParameters(1, 5, 2, 5, 2)
-        h.FillRandom('xyg', 2000000)
-        h.Draw('colz')
-        self.Plots.append(h)
-
-    def clk_scan(self):
+    def clk_scan(self, exclude=None):
         """ scanning digital clk and deser phases """
         n = 10
         n_rocs = self.api.getNRocs()
@@ -374,7 +360,7 @@ class CLIX:
         print
         good = []
         for clk in xrange(20):
-            if clk==13:
+            if clk == exclude:
                 continue
             self.set_clock(clk)
             print '{:2d}:'.format(clk),
@@ -459,10 +445,11 @@ class CLIX:
             while n_triggers < max_triggers:
                 try:
                     data = self.api.daqGetEvent()
-                    trigger_phases[data.triggerPhases[0]] += 1
-                    for roc in set([pix.roc for pix in data.pixels]):
-                        yields[roc][wbc] += 1. * 100. / max_triggers
-                    n_triggers += 1
+                    if data.header:
+                        trigger_phases[data.triggerPhases[0]] += 1
+                        for roc in set([pix.roc for pix in data.pixels]):
+                            yields[roc][wbc] += 1. * 100. / max_triggers
+                        n_triggers += 1
                 except RuntimeError:
                     pass
             y_strings = ['{y:5.1f}%'.format(y=yld) for yld in [yields[roc][wbc] for roc in yields.iterkeys()]]
@@ -499,21 +486,23 @@ class CLIX:
         # plot wbc_scan
         mg = TMultiGraph('mg_wbc', 'WBC Scans for all ROCs')
         colors = range(1, len(yields) + 1)
-        l = Plotter.create_legend(nentries=len(yields), x1=.7)
+        leg = Plotter.create_legend(nentries=len(yields), x1=.7)
         for i, (roc, dic) in enumerate(yields.iteritems()):
             gr = Plotter.create_graph(x=dic.keys(), y=dic.values(), tit='wbcs for roc {r}'.format(r=roc), xtit='wbc', ytit='yield [%]', color=colors[i])
-            l.AddEntry(gr, 'roc{r}'.format(r=roc), 'lp')
+            leg.AddEntry(gr, 'roc{r}'.format(r=roc), 'lp')
             mg.Add(gr, 'lp')
-        self.Plotter.plot_histo(mg, draw_opt='a', l=l)
+        self.Plotter.plot_histo(mg, draw_opt='a', l=leg)
         mg.GetXaxis().SetTitle('WBC')
         mg.GetYaxis().SetTitle('Yield [%]')
 
-    def hitmap(self, t=1, random_trigger=1, n=10000):
+    def hitmap(self, t=1, random_trigger=1, n=10000, wbc=123):
         self.api.HVon()
         t_start = time()
         if random_trigger:
             self.set_pg(cal=False, res=False, delay=20)
         else:
+            self.signal_probe('a1', 'sdata2')
+            self.set_dac('wbc', wbc)
             self.api.daqTriggerSource('extern')
         self.api.daqStart()
         self.start_pbar(t * 600)
@@ -523,8 +512,11 @@ class CLIX:
             if random_trigger:
                 self.api.daqTrigger(n, 500)
             try:
-                sleep(.5)
-                data += self.api.daqGetEventBuffer()
+                if random_trigger:
+                    sleep(.5)
+                    data += self.api.daqGetEventBuffer()
+                else:
+                    data += [self.api.daqGetEvent()]
             except RuntimeError:
                 pass
             except MemoryError:
@@ -546,8 +538,12 @@ class CLIX:
         stats.dump
         print 'Event Rate: {0:5.4f} MHz'.format(event_rate / 1000000)
         print 'Hit Rate:   {0:5.4f} MHz'.format(hit_rate / 1000000)
-        writer = TreeWriter(data)
-        writer.write_tree()
+
+    def hitmap_random(self, t, n=10000, wbc=123):
+        return self.hitmap(t, random_trigger=True, n=n)
+
+    def hitmap_trigger(self, t, wbc=123):
+        return self.hitmap(t, random_trigger=False)
 
     def load_mask(self, file_name):
         f = open(file_name, 'r')
@@ -563,7 +559,30 @@ class CLIX:
                         print col, row, i2c
                         self.api.maskPixel(col, row, False, i2c)
 
-
+    def save_data(self, n=240000):
+        global BREAK
+        t = TreeWriterLjubljana()
+        info('START DATA ACQUISITION FOR RUN {}'.format(t.RunNumber))
+        self.api.HVon()
+        self.trigger_source('extern')
+        self.set_dac('wbc', t.Config.getint('MAIN', 'wbc'))
+        self.signal_probe('a1', 'sdata2')
+        self.daq_start()
+        i = 0
+        while True:
+            try:
+                t.write(self.api.daqGetEvent())
+                print '\r{}'.format(i),
+                stdout.flush()
+                i += 1
+                if i == n:
+                    call('ssh -tY f9pc DISPLAY=:0 /home/f9pc001/miniconda2/bin/python /home/f9pc001/Downloads/run/say.py'.split() + ['"finished run {}"'.format(t.RunNumber)])
+            except RuntimeError:
+                pass
+            if BREAK:
+                break
+        self.daq_stop()
+        BREAK = False
 
 
 def set_palette(custom=True, pal=1):
@@ -621,5 +640,4 @@ if __name__ == '__main__':
     ev = z.daq_get_event
     raw = z.daq_get_raw_event
     dt = z.daq_trigger
-    ia = z.get_tb_ia
     # sd = z.api.setDAC

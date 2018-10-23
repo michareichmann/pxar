@@ -50,7 +50,8 @@ namespace pxar {
 
     /** Constructor for pixel objects with analog levels data, ultrablack & black levels and ROC id initialization.
      */
-  pixel(std::vector<uint16_t> analogdata, uint8_t rocid, int16_t ultrablack, int16_t black) : _roc_id(rocid) { decodeAnalog(analogdata,ultrablack,black); }
+    pixel(std::vector<uint16_t> analogdata, uint8_t rocid, int16_t ultrablack, int16_t black) : _roc_id(rocid) { decodeAnalog(analogdata, ultrablack, black); }
+    pixel(std::vector<uint16_t> analogdata, uint8_t rocid, std::vector<float> thresholds) : _roc_id(rocid) { decodeAnalog(analogdata, thresholds); }
 
     /** Getter function to return ROC ID
      */
@@ -187,9 +188,15 @@ namespace pxar {
      */
     void decodeAnalog(std::vector<uint16_t> analog, int16_t ultrablack, int16_t black);
 
+    void decodeAnalog(std::vector<uint16_t> analog, std::vector<float>);
+
     /** Helper function to translate ADC values into address levels
      */
-    uint8_t translateLevel(uint16_t x, int16_t level0, int16_t level1, int16_t levelS);
+    uint8_t translateLevel(int16_t x, int16_t level0, int16_t level1, int16_t levelS);
+
+    uint8_t translateLevel(int16_t x, std::vector<float> thresholds, uint8_t lastLevel, bool adjust=true);
+
+    int16_t adjustLevel(int16_t analog, uint8_t lastLevel, std::vector<float> thresholds);
 
     /** Helper function to compress double input value into
      *  a 16bit fixed-width integer for storage
