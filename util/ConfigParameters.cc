@@ -80,6 +80,7 @@ void ConfigParameters::initialize() {
   fProbeD1 = "clk";
   fProbeD2 = "ctr";
   fOffsetDecoding = 0;
+  fDecodingThresholds = {};
 
   rocZeroAnalogCurrent = 0.0;
   fRocType = "psi46digv21respin";
@@ -198,7 +199,7 @@ bool ConfigParameters::readConfigParameterFile(string file) {
       else if (0 == _name.compare("probeD2")) { fProbeD2 = _value; }
 
       else if (0 == _name.compare("decodingOffset")) { fOffsetDecoding = _ivalue; }
-
+      else if (_name == "analogueThresholds") { readDecodingThresholds(_istring.str()); }
 
       else { LOG(logINFO) << "Did not understand '" << _name << "'."; }
     }
@@ -1134,6 +1135,28 @@ void ConfigParameters::readReadbackCal() {
 }
 
 // ----------------------------------------------------------------------
+void ConfigParameters::readDecodingThresholds(std::string line) {
+
+  line = trim(line, "analogueThresholds ");
+  std::vector<std::vector<float> > thresholds;
+  std::vector<std::string> roc_list = split(line, "]", false);
+  for (size_t i(0); i < roc_list.size(); i++){
+    std::vector<float> tmp;
+    std::vector<std::string> split_string = split(roc_list.at(i), ",", true);
+    for (size_t j(0); j < split_string.size(); j++){
+      if (split_string.at(j).empty())
+        continue;
+      tmp.push_back(float(atof(split_string.at(j).c_str())));
+//      std::cout << atof(split_string.at(j).c_str()) << std::endl;
+    }
+    if (!tmp.empty())
+      thresholds.push_back(tmp);
+  }
+  fDecodingThresholds = thresholds;
+  LOG(logINFO) << "Successfully read decoding thresholds for " << thresholds.size() << " ROCs!";
+}
+
+// ----------------------------------------------------------------------
 vector<pair<string, double> > ConfigParameters::readReadbackFile(string fname) {
   vector<pair<string, double> > rocRb;
 
@@ -1231,3 +1254,27 @@ void ConfigParameters::setTrimVcalSuffix(string name, bool nocheck) {
   InputFile.close();
 }
 
+
+std::vector<std::string> ConfigParameters::split(const std::string &str, const std::string &delim, bool dotrim) {
+
+    std::string s(str);
+    std::vector<std::string> result;
+    if (str.empty()) return result;
+    size_t i;
+    while ((i = s.find_first_of(delim)) != std::string::npos) {
+      result.push_back(dotrim ? trim(s.substr(0, i)) : s.substr(0, i));
+      s = s.substr(i + 1);
+    }
+    result.push_back(s);
+    return result;
+}
+
+std::string ConfigParameters::trim(const std::string &s, std::string trim_characters) {
+
+  size_t b = s.find_first_not_of(trim_characters);
+  size_t e = s.find_last_not_of(trim_characters);
+  if (b == std::string::npos || e == std::string::npos) {
+    return "";
+  }
+  return std::string(s, b, e - b + 1);
+}

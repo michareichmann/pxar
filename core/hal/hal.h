@@ -392,6 +392,8 @@ namespace pxar {
 
     void setOffset(uint8_t offsetDec) { decoder0.setOffset(offsetDec); }
 
+    void setDecodingThresholds(std::vector<std::vector<float> > values) { decoder0.setThresholds(values); }
+
   private:
 
     /** Private instance of the testboard RPC interface, routes all

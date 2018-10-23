@@ -169,6 +169,10 @@ namespace pxar {
 
     // Analog level averaging:
     void AverageAnalogLevel(int32_t &variable, int16_t dataword);
+
+    /** Fixed level thresholds */
+    bool hasThresholds;
+    std::vector<std::vector<float> > thresholds;
     // Last DAC storage for analog ROCs:
     void evalLastDAC(uint8_t roc, uint16_t val);
     int32_t ultrablack;
@@ -187,6 +191,7 @@ public:
                         counter(0), sumB(0), sumUB(0), meanB(0), meanUB(0), offsetB(20) {};
     void Clear() { decodingStats.clear(); readback.clear(); count.clear(); shiftReg.clear(); eventID = -1; };
     void setOffset(uint8_t decodingOffset) { offsetB = decodingOffset; }
+    void setThresholds(const std::vector<std::vector<float> > values) { thresholds = values; hasThresholds = bool(!values.empty()); }
 
     statistics getStatistics();
     std::vector<std::vector<uint16_t> > getReadback();

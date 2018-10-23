@@ -356,24 +356,31 @@ namespace pxar {
                        << expandSign((*(word+2)) & 0x0fff) << " (lastDAC) ";
             // Advance iterator:
             word +=  2;
+      }
+      // We have a pixel hit:
+      else {
+        // Not enough data for a new pixel hit (six words):
+        if(sample->data.end() - word < 6) {
+          decodingStats.m_errors_pixel_incomplete++;
+          break;
         }
-        // We have a pixel hit:
-        else {
-            // Not enough data for a new pixel hit (six words):
-            if(sample->data.end() - word < 6) {
-              decodingStats.m_errors_pixel_incomplete++;
-              break;
+
+        std::vector<uint16_t> data;
+        data.push_back((*word) & 0x0fff);
+        for(size_t i = 0; i < 5; i++) { data.push_back((*(++word)) & 0x0fff); }
+
+        try{
+//            std::cout << "ROC " << roc_n << std::endl;
+            LOG(logDEBUGPIPES) << "Trying to decode pixel: " << listVector(data, false, true);
+            if (hasThresholds){
+              pixel pix(data, roc_n, thresholds.at(roc_n));
+              roc_Event.pixels.push_back(pix);
             }
-
-            std::vector<uint16_t> data;
-            data.push_back((*word) & 0x0fff);
-            for(size_t i = 0; i < 5; i++) { data.push_back((*(++word)) & 0x0fff); }
-
-            try{
-                LOG(logDEBUGPIPES) << "Trying to decode pixel: " << listVector(data,false,true);
-                pixel pix(data,roc_n,ultrablack,black);
-                roc_Event.pixels.push_back(pix);
-                decodingStats.m_info_pixels_valid++;
+            else {
+              pixel pix(data, roc_n, int16_t(ultrablack), int16_t(black));
+              roc_Event.pixels.push_back(pix);
+            }
+            decodingStats.m_info_pixels_valid++;
             }
             catch(DataDecodingError /*&e*/){
                 // decoding of raw address lead to invalid address
