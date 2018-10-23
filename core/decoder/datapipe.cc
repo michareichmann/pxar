@@ -386,9 +386,16 @@ namespace pxar {
         for(size_t i = 0; i < 5; i++) { data.push_back((*(++word)) & 0x0fff); }
 
         try{
+//            std::cout << "ROC " << roc_n << std::endl;
             LOG(logDEBUGPIPES) << "Trying to decode pixel: " << listVector(data, false, true);
-            pixel pix(data,roc_n, int16_t(ultraBlack.at(roc_n)), int16_t(black.at(roc_n)));
-            roc_Event.pixels.push_back(pix);
+            if (hasThresholds){
+              pixel pix(data, roc_n, thresholds.at(roc_n));
+              roc_Event.pixels.push_back(pix);
+            }
+            else {
+              pixel pix(data, roc_n, int16_t(ultraBlack.at(roc_n)), int16_t(black.at(roc_n)));
+              roc_Event.pixels.push_back(pix);
+            }
             decodingStats.m_info_pixels_valid++;
         }
         catch(DataDecodingError /*&e*/){
@@ -564,17 +571,19 @@ namespace pxar {
 
   void dtbEventDecoder::AverageAnalogLevel(int16_t word1, int16_t word2, int16_t roc_n) {
 
-    // Take the mean for a window of 1000 samples, initial measurement included
-    if(slidingWindow.at(roc_n) < 1000) {
-      slidingWindow.at(roc_n)++;
-      ultraBlack.at(roc_n) += (expandSign(word1 & 0x0fff) - ultraBlack.at(roc_n)) / slidingWindow.at(roc_n);
-      black.at(roc_n) += (expandSign(word2 & 0x0fff) + offsetB - black.at(roc_n)) / slidingWindow.at(roc_n);
-    }
-    // Sliding window:
-    else {
-      ultraBlack.at(roc_n) = 999. / 1000 * ultraBlack.at(roc_n) + 1. / 1000 * expandSign(word1 & 0x0fff);
-      black.at(roc_n) = 999. / 1000 * black.at(roc_n) + 1. / 1000 * (expandSign(word2 & 0x0fff) + offsetB);
-    }
+    ultraBlack.at(roc_n) = expandSign(word1 & 0x0fff);
+    black.at(roc_n) = expandSign(word2 & 0x0fff) + offsetB;
+//    // Take the mean for a window of 1000 samples, initial measurement included
+//    if(slidingWindow.at(roc_n) < 1000) {
+//      slidingWindow.at(roc_n)++;
+//      ultraBlack.at(roc_n) += (expandSign(word1 & 0x0fff) - ultraBlack.at(roc_n)) / slidingWindow.at(roc_n);
+//      black.at(roc_n) += (expandSign(word2 & 0x0fff) + offsetB - black.at(roc_n)) / slidingWindow.at(roc_n);
+//    }
+//    // Sliding window:
+//    else {
+//      ultraBlack.at(roc_n) = 999. / 1000 * ultraBlack.at(roc_n) + 1. / 1000 * expandSign(word1 & 0x0fff);
+//      black.at(roc_n) = 999. / 1000 * black.at(roc_n) + 1. / 1000 * (expandSign(word2 & 0x0fff) + offsetB);
+//    }
     levelS.at(roc_n) = static_cast<int16_t>((int(black.at(roc_n)) - int(ultraBlack.at(roc_n))) / 8);
   }
 

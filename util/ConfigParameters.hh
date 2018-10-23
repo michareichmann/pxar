@@ -104,6 +104,7 @@ public:
   bool customI2cAddresses() {return fI2cAddresses.size() > 0;}
   std::vector<uint8_t> getI2cAddresses() {return fI2cAddresses;}
   uint8_t getDecodingOffset() { return fOffsetDecoding; }
+  std::vector<std::vector<float> > getDecodingThresholds() { return fDecodingThresholds; }
 
   bool setTbParameter(std::string, uint8_t, bool appendIfNotFound = false);
   bool setTbPowerSettings(std::string, double);
@@ -153,12 +154,16 @@ public:
   void cleanupString(std::string& str);
   void readNrocs(std::string line);
   void readHubIds(std::string line);
+  void readDecodingThresholds(std::string line);
 
   int getGuiX() {return fGuiX;}
   int getGuiY() {return fGuiY;}
 
   void setGuiX(int x) {fGuiX = x;}
   void setGuiY(int x) {fGuiY = x;}
+
+  std::vector<std::string> split(const std::string & str, const std::string & delim, bool dotrim);
+  std::string trim(const std::string & s, std::string trim_characters="\t\n\r\v []");
 
 private:
 
@@ -187,6 +192,7 @@ private:
   bool fHvOn, fTbmEnable, fTbmEmulator, fKeithleyRemote, fGuiMode;
   std::string fProbeA1,fProbeA2, fProbeD1, fProbeD2;
   uint8_t fOffsetDecoding;
+  std::vector<std::vector<float> > fDecodingThresholds;
 
   std::string fTBParametersFileName;
   std::string fTrimVcalSuffix;

@@ -71,13 +71,48 @@ namespace pxar {
     else if (_buffer_corruption) throw DataCorruptBufferError("Error decoding pixel raw value");
   }
 
-  uint8_t pixel::translateLevel(uint16_t x, int16_t level0, int16_t level1, int16_t levelS) {
-    int16_t y = expandSign(x) - level0;
-    if (y >= 0) y += levelS; else y -= levelS;
-    uint8_t retVal =  level1 ? y/level1 + 1: 0;
-    if (retVal > 5)
-        retVal =  5;
-    return retVal;
+  uint8_t pixel::translateLevel(int16_t x, int16_t level0, int16_t level1, int16_t levelS) {
+    uint8_t level = uint8_t((x + level1 + levelS) / level1);
+    return int(level) > 5 ? uint8_t(5) : level;
+  }
+
+  uint8_t pixel::translateLevel(int16_t x, std::vector<float> thresholds, uint8_t lastLevel, bool adjust) {
+
+    int16_t level = adjust ? adjustLevel(expandSign(x), lastLevel, thresholds) : expandSign(x);
+    for (uint8_t i(0); i < thresholds.size(); i++)
+      if (level < thresholds.at(i))
+        return i;
+    return 5;
+  }
+
+  int16_t pixel::adjustLevel(int16_t analogue, uint8_t lastLevel, std::vector<float> thresholds) {
+    float diff =  5 * (lastLevel - translateLevel(analogue, thresholds, lastLevel, false));
+    return int16_t(analogue - diff);
+  }
+
+  void pixel::decodeAnalog(std::vector<uint16_t> analog, std::vector<float> thresholds) {
+
+    /** Get the pulse height */
+    setValue(static_cast<double>(expandSign(analog.back() & 0x0fff)));
+
+    /** Get the column and row */
+    uint8_t c1 = translateLevel(analog.at(0), thresholds, 5);
+    uint8_t c0 = translateLevel(analog.at(1), thresholds, c1);
+    int c  = c1*6 + c0;
+
+    uint8_t r2 = translateLevel(analog.at(2), thresholds, c0);
+    uint8_t r1 = translateLevel(analog.at(3), thresholds, r2);
+    uint8_t r0 = translateLevel(analog.at(4), thresholds, r1);
+    int r  = (r2*6 + r1)*6 + r0;
+
+    _row = uint8_t(80 - r/2);
+    _column = uint8_t(2*c + (r&1));
+
+    /** Perform range checks */
+    if(_row >= ROC_NUMROWS || _column >= ROC_NUMCOLS) {
+      LOG(logDEBUGAPI) << "Invalid pixel from levels "<< listVector(analog) << ": " << *this;
+      throw DataInvalidAddressError("Error decoding pixel address");
+    }
   }
 
   void pixel::decodeAnalog(std::vector<uint16_t> analog, int16_t ultrablack, int16_t black) {
@@ -93,18 +128,23 @@ namespace pxar {
     int16_t level1 = (black - ultrablack)/4;
     int16_t levelS = level1/2;
 
-    // Get the pulse height:
+    /** Get the pulse height */
     setValue(static_cast<double>(expandSign(analog.back() & 0x0fff) - level0));
 
     // Decode the pixel address
-    int c1 = translateLevel(analog.at(0),level0,level1,levelS);
-    int c0 = translateLevel(analog.at(1),level0,level1,levelS);
+    int c1 = translateLevel(expandSign(analog.at(0)),level0,level1,levelS);
+    int c0 = translateLevel(expandSign(analog.at(1)),level0,level1,levelS);
     int c  = c1*6 + c0;
 
-    int r2 = translateLevel(analog.at(2),level0,level1,levelS);
-    int r1 = translateLevel(analog.at(3),level0,level1,levelS);
-    int r0 = translateLevel(analog.at(4),level0,level1,levelS);
+    int r2 = translateLevel(expandSign(analog.at(2)),level0,level1,levelS);
+    int r1 = translateLevel(expandSign(analog.at(3)),level0,level1,levelS);
+    int r0 = translateLevel(expandSign(analog.at(4)) - 10,level0,level1,levelS);
     int r  = (r2*6 + r1)*6 + r0;
+
+//    std::cout << ultrablack << ", " << black << ", ";
+//    for (int i(0);i<5;i++)
+//      std::cout << expandSign(analog.at(i)) << ", ";
+//    std::cout << std::endl;
 
     _row = 80 - r/2;
     _column = 2*c + (r&1);
