@@ -71,8 +71,10 @@ namespace pxar {
     else if (_buffer_corruption) throw DataCorruptBufferError("Error decoding pixel raw value");
   }
 
-  uint8_t pixel::translateLevel(int16_t x, int16_t level0, int16_t level1, int16_t levelS) {
-    uint8_t level = uint8_t((x + level1 + levelS) / level1);
+  uint8_t pixel::translateLevel(int16_t x, int16_t level0, int16_t level1, int16_t levelS, uint8_t lastLevel, bool adjust) {
+
+    int16_t value = adjust ? adjustLevel(expandSign(x), level1, levelS, lastLevel) : expandSign(x);
+    uint8_t level = uint8_t((value + level1 + levelS) / level1);
     return int(level) > 5 ? uint8_t(5) : level;
   }
 
@@ -87,6 +89,11 @@ namespace pxar {
 
   int16_t pixel::adjustLevel(int16_t analogue, uint8_t lastLevel, std::vector<float> thresholds) {
     float diff =  5 * (lastLevel - translateLevel(analogue, thresholds, lastLevel, false));
+    return int16_t(analogue - diff);
+  }
+
+  int16_t pixel::adjustLevel(int16_t analogue, int16_t level1, int16_t levelS, uint8_t lastLevel) {
+    float diff =  5 * (lastLevel - translateLevel(analogue, 0, level1, levelS, lastLevel, false));
     return int16_t(analogue - diff);
   }
 
@@ -132,13 +139,13 @@ namespace pxar {
     setValue(static_cast<double>(expandSign(analog.back() & 0x0fff) - level0));
 
     // Decode the pixel address
-    int c1 = translateLevel(expandSign(analog.at(0)),level0,level1,levelS);
-    int c0 = translateLevel(expandSign(analog.at(1)),level0,level1,levelS);
+    int c1 = translateLevel(analog.at(0),level0,level1,levelS, 5);
+    int c0 = translateLevel(analog.at(1),level0,level1,levelS, c1);
     int c  = c1*6 + c0;
 
-    int r2 = translateLevel(expandSign(analog.at(2)),level0,level1,levelS);
-    int r1 = translateLevel(expandSign(analog.at(3)),level0,level1,levelS);
-    int r0 = translateLevel(expandSign(analog.at(4)) - 10,level0,level1,levelS);
+    int r2 = translateLevel(analog.at(2),level0,level1,levelS, c0);
+    int r1 = translateLevel(analog.at(3),level0,level1,levelS, r2);
+    int r0 = translateLevel(analog.at(4),level0,level1,levelS, r1);
     int r  = (r2*6 + r1)*6 + r0;
 
 //    std::cout << ultrablack << ", " << black << ", ";
