@@ -11,6 +11,8 @@ import shlex
 from collections import OrderedDict
 from datetime import datetime
 from ConfigParser import ConfigParser
+from json import loads
+from utils import info
 
 # "arity": decorator used for parameter parsing/verification on each cmd function call
 # Usually, the cmd module only passes a single string ('line') with all parameters;
@@ -66,6 +68,8 @@ class PxarConfigFile:
             for line in thisf:
                 if not line.startswith("--") and not line.startswith("#"):
                     parts = shlex.split(line)
+                    if len(parts) < 2:
+                        continue
                     if len(parts) == 2:
                         self.config[parts[0].lower()] = parts[1]
                     elif len(parts) == 3:
@@ -75,6 +79,8 @@ class PxarConfigFile:
                         parts = [parts[0],' '.join(parts[1:])]
                         if len(parts) == 2:
                             self.config[parts[0].lower()] = parts[1]
+                    else:
+                        self.config[parts[0].lower()] = ' '.join(parts[1:])
 
         finally:
             thisf.close()
@@ -352,10 +358,10 @@ def PxarStartup(directory, verbosity, trim=None):
         for i2c, npix in zip(rocI2C, n_pixels):
             print 'We have {n} pixels for ROC {i}'.format(n=npix, i=i2c)
 
-
+    roc_type =  config.get('rocType')
     # set pgcal according to wbc
     pgcal = int(rocDacs[0]['wbc'])
-    pgcal += 6 if 'dig' in config.get('rocType') else 5
+    pgcal += 6 if 'dig' in roc_type else 5
     print 'pgcal is:', pgcal
 
     # Pattern Generator for single ROC operation:
@@ -379,9 +385,13 @@ def PxarStartup(directory, verbosity, trim=None):
         print "Please check if a new FW version is available"
         exit()
 
-    if not any(word in config.get('rocType') for word in ['dig', 'proc']):
+    if not any(word in roc_type for word in ['dig', 'proc']):
         print 'Analogue decodingOffset set to:', int(config.get("decodingOffset", 0))
         api.setDecodingOffset(int(config.get("decodingOffset", int(0))))
+    if roc_type == 'psi46v2' and 'analogueThresholds'.lower() in config.config:
+        thresholds = loads(config.get('analoguethresholds', [[]]))
+        api.setDecodingThresholds(thresholds)
+        info('Successfully initialised thresholds for {} ROCs'.format(len(thresholds)))
     print "And we have just initialized " + str(len(pixels)) + " pixel configs to be used for every ROC!"
 
     hubids = [int(i) for i in config.get("hubId",31).split(',')]

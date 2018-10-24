@@ -343,6 +343,13 @@ cdef class PyPxarCore:
     def setDecodingOffset(self, offset):
         cdef uint8_t os = offset
         self.thisptr.setDecodingOffset(os)
+    def setDecodingThresholds(self, thresholds):
+        cdef vector[vector[float]] th
+        for i, lst in enumerate(thresholds):
+            th.push_back(vector[float]())
+            for value in lst:
+                th.at(i).push_back(value)
+        self.thisptr.setDecodingThresholds(th)
     def getTestboardDelays(self):
         r = self.thisptr.getTestboardDelays()
         return {tup.first: tup.second for tup in r}
