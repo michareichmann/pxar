@@ -1324,7 +1324,7 @@ class PxarCoreCmd(cmd.Cmd):
                 elif eff > 0:
                     print '{c}{eff:1.1f}{e}'.format(eff=eff, c=RED, e=ENDC),
                 else:
-                    print ' x ',
+                    print ' - ',
             print
         if not good:
             'Did not find any good timing...'
