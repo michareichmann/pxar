@@ -233,6 +233,7 @@ cdef class PyPxarCore:
             th.push_back(vector[float]())
             for value in lst:
                 th.at(i).push_back(value)
+        self.thisptr.setDecodingThresholds(th)
     def setTestboardDelays(self, sig_delays):
         """ Initializer method for the testboard
         Parameters are dictionaries in the form {"name":value}:
