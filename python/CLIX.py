@@ -1,16 +1,16 @@
 #!/usr/bin/env python2
 """ Simple Example Python Script Using the Pxar API. """
 
-from numpy import zeros, array, mean
-from pxar_helpers import *  # arity decorator, PxarStartup, PxarConfigFile, PxarParametersFile and others
-from sys import argv, path, stdout, exit
-from os.path import join, dirname, realpath
-
 # add python and cython libs
+from os.path import join, dirname, realpath
+from sys import argv, path, stdout, exit
 pxar_dir = dirname(dirname(realpath(__file__)))
 path.insert(1, join(pxar_dir, 'lib'))
 path.insert(1, join(pxar_dir, 'python', 'src'))
+
 from utils import *
+from numpy import zeros, array, mean, arange
+from pxar_helpers import *  # arity decorator, PxarStartup, PxarConfigFile, PxarParametersFile and others
 
 gui_available = has_root()
 if gui_available:
@@ -216,25 +216,25 @@ class PxarCoreCmd(cmd.Cmd):
             print "converted Event:\t", event
         return event
 
-    def translate_levels(self):
-        event = self.converted_raw_event()
-        rocs = 0
-        for i in event:
-            if i < event[0] * 3 / 4:
-                rocs += 1
-        hits = (len(event) - rocs * 3) / 6
-        if hits == 0:
-            print 'there was not a single pixel hit'
-        addresses = []
-        for hit in range(hits):
-            levels = []
-            for level in range(3, 8):
-                y = self.translate_level(event[level + 6 * hit], event)
-                levels.append(y)
-            addresses.append(self.get_addresses(levels))
-            addresses[hit].append(event[8 + 6 * hit])
-            print 'Hit:', "{0:2d}".format(hit), addresses[hit]
-        return addresses
+    # def translate_levels(self):
+    #     event = self.converted_raw_event()
+    #     rocs = 0
+    #     for i in event:
+    #         if i < event[0] * 3 / 4:
+    #             rocs += 1
+    #     hits = (len(event) - rocs * 3) / 6
+    #     if hits == 0:
+    #         print 'there was not a single pixel hit'
+    #     addresses = []
+    #     for hit in range(hits):
+    #         levels = []
+    #         for level in range(3, 8):
+    #             y = self.translate_level(event[level + 6 * hit], event)
+    #             levels.append(y)
+    #         addresses.append(self.get_addresses(levels))
+    #         addresses[hit].append(event[8 + 6 * hit])
+    #         print 'Hit:', "{0:2d}".format(hit), addresses[hit]
+    #     return addresses
 
     def get_levels(self, convert_header=False):
         events = self.converted_raw_event()
@@ -251,29 +251,36 @@ class PxarCoreCmd(cmd.Cmd):
                 events[i], events[i + 1] = self.translate_level(events[i], events, i), self.translate_level(events[i + 1], events, i)
         return events
 
-    def address_level_scan(self):
-        self.api.daqStart()
-        self.api.daqTrigger(1000, 500)  # choose here how many triggers you want to send (crucial for the time it takes)
-        plotdata = zeros(1024)
-        try:
+    def get_n_rocs(self):
+        return self.api.getNRocs()
 
-            while True:
-                pos = -3
-                dat = self.api.daqGetRawEvent()
-                for i in dat:
-                    # REMOVE HEADER
-                    i &= 0x0fff
-                    # Remove PH from hits:
-                    if pos == 5:
-                        pos = 0
+    def enable_single_pixel(self, row=14, column=14, roc=None):
+        """enableOnePixel [row] [column] [roc] : enables one Pixel (default 14/14); masks and disables the rest"""
+        print '--> disable and mask all pixels of all activated ROCs'
+        self.api.testAllPixels(0)
+        self.api.maskAllPixels(1)
+        self.api.testPixel(row, column, 1, roc)
+        self.api.maskPixel(row, column, 0, roc)
+        print_string = '--> enable and unmask Pixel {r}/{c}: '.format(r=row, c=column)
+        print_string += '(' + ','.join('ROC {n}: {a}/{m}'.format(n=roc, a=self.get_activated(roc)[0], m=self.get_activated(roc)[1]) for roc in xrange(self.api.getNEnabledRocs())) + ')'
+        print print_string
+
+    def address_level_scan(self, triggers=1000, offset=0):
+        self.api.daqStart()
+        self.api.daqTrigger(triggers, 500)
+        n_rocs = self.get_n_rocs()
+        plotdata = zeros((n_rocs, 1024))
+        for _ in xrange(triggers):
+            event = self.converted_raw_event()
+            for roc in xrange(n_rocs):
+                for j in xrange(8):
+                    index = j + 9 * roc
+                    if index % 9 == 2:  # skip the read back
                         continue
-                    # convert negatives
-                    if i & 0x0800:
-                        i -= 4096
-                    plotdata[500 + i] += 1
-                    pos += 1
-        except RuntimeError:
-            pass
+                    off = 0
+                    if index % 9 == 3:
+                        off = offset
+                    plotdata[roc][event[index] + 511 + off] += 1
         self.api.daqStop()
         return plotdata
 
@@ -428,13 +435,13 @@ class PxarCoreCmd(cmd.Cmd):
     def get_activated(self, roc=None):
         return (self.api.getNEnabledPixels(), self.api.getNMaskedPixels()) if roc is None else (self.api.getNEnabledPixels(roc), self.api.getNMaskedPixels(roc))
 
-    @staticmethod
-    def translate_level(level, event, roc=0):
-        offset = 7
-        y = level - event[roc + 1]
-        y += (event[roc + 1] - event[roc + 0] + offset) / 8
-        y /= (event[roc + 1] - event[roc + 0] + offset) / 4
-        return y + 1
+    # @staticmethod
+    # def translate_level(level, event, roc=0):
+    #     offset = 7
+    #     y = level - event[roc + 1]
+    #     y += (event[roc + 1] - event[roc + 0] + offset) / 8
+    #     y /= (event[roc + 1] - event[roc + 0] + offset) / 4
+    #     return y + 1
 
     # endregion
 
@@ -693,6 +700,86 @@ class PxarCoreCmd(cmd.Cmd):
             self.api.daqGetEventBuffer()
         except RuntimeError:
             pass
+
+    def get_mean_black_levels(self, avg=100):
+        n_rocs = self.api.getNRocs()
+        self.api.daqTrigger(avg, 500)
+        events = [self.converted_raw_event() for _ in xrange(avg)]
+        b_levels = [[event[i] for event in events] for i in xrange(1, 3 * n_rocs, 3)]
+        ub_levels = [[event[i] for event in events] for i in xrange(0, 3 * n_rocs, 3)]
+        b = [mean(l) for l in b_levels]
+        ub = [mean(l) for l in ub_levels]
+        return b, ub
+
+    def get_mean_levels(self, avg=1000):
+        n_rocs = self.api.getNRocs()
+        self.api.daqTrigger(avg, 500)
+        events = [self.converted_raw_event() for _ in xrange(avg)]
+        levels = [[mean([event[i] for event in events]) for i in (arange(8) + 9 * roc) if i % 9 != 2] for roc in xrange(n_rocs)]
+        return levels
+
+    def get_mean_levels_pix(self, col, row, avg=1000):
+        self.enable_single_pixel(col, row)
+        self.api.daqStart()
+        levels = self.get_mean_levels(avg)
+        self.api.daqStop()
+        return levels
+
+    def get_splittings(self):
+        l0 = [mean(lst[2:5]) for lst in self.get_mean_levels_pix(0, 79)]
+        l1 = [mean(lst[2:5]) for lst in self.get_mean_levels_pix(15, 59)]
+        l2 = [mean(lst[2:5]) for lst in self.get_mean_levels_pix(28, 37)]
+        l3 = [mean(lst[2:5]) for lst in self.get_mean_levels_pix(43, 16)]
+        l4 = [mean(lst[3:5] + lst[-1:]) for lst in self.get_mean_levels_pix(44, 0)]
+        l5 = [mean(lst[3:4] + lst[-2:]) for lst in self.get_mean_levels_pix(35, 9)]
+        levels = [l0, l1, l2, l3, l4, l5]
+        levels = [[lst[i] for lst in levels] for i in xrange(len(levels[0]))]
+        return [[(lst[i] + lst[i - 1]) / 2 for i in xrange(1, 6)] for lst in levels]
+
+    def save_splittings(self):
+        config_file = join(self.dir, 'configParameters.dat')
+        parameter = 'analogueThresholds'
+        with open(config_file) as f:
+            lines = f.readlines()
+        has_splittings = parameter in [word for line in lines for word in line.split()]
+        thresholds = [[round(v, 1) for v in lst] for lst in self.get_splittings()]
+        with open(config_file, 'w') as out:
+            for line in lines:
+                if not has_splittings and line.startswith('rocType'):
+                    line += '{} {}\n'.format(parameter, thresholds)
+                if has_splittings and line.startswith(parameter):
+                    line = '{} {}\n'.format(parameter, thresholds)
+                out.write(line)
+        info('wrote analogue thresholds to: {}'.format(config_file))
+
+    def translate_level(self, value, l1, ls):
+        return (value + l1 + ls) / l1
+
+    def translate_levels(self, raw_event, offset):
+        l0 = raw_event[1] + offset
+        l1 = (l0 - raw_event[0]) / 4
+        ls = l1 / 2
+        print l1, ls, offset
+        return [self.translate_level(level, l1, ls) for level in raw_event[3:8]]
+
+    def find_decoding_offset(self, roc):
+        self.enable_single_pixel(0, 62)
+        self.api.daqStart()
+        levels = self.get_mean_levels()[roc]
+        self.api.daqStop()
+        ub, b = levels[0], levels[1]
+        offset = b - mean([levels[-1], levels[-2], levels[-4]])
+        l0 = b + offset
+        l1 = (ub - l0) / 4
+        s = l1 / 2
+        print l0, l1, s
+        print offset
+        self.enable_single_pixel(17, 12)
+        self.api.daqStart()
+        levels = self.get_mean_levels()[roc]
+        self.api.daqStop()
+
+
 
     # endregion
 
@@ -1404,7 +1491,7 @@ class PxarCoreCmd(cmd.Cmd):
         self.enable_pix(5, 12)
         self.window = PxarGui(gClient.GetRoot(), 800, 800)
         plotdata = self.address_level_scan()
-        plot = Plotter.create_th1(plotdata, -512, +512, "Address Levels", "ADC", "#")
+        plot = Plotter.create_th1(plotdata[0], -512, +512, "Address Levels", "ADC", "#")
         self.window.histos.append(plot)
         self.window.update()
 
@@ -1515,23 +1602,13 @@ class PxarCoreCmd(cmd.Cmd):
 
     # ==============================================
     # region Miscellaneous
-    @arity(0, 0, [])
-    def do_analogLevelScan(self):
+    @arity(0, 4, [int, int, int, int])
+    def do_analogLevelScan(self, roc=0, col=5, row=12, offset=0):
         """analogLevelScan: scan the ADC levels of an analog ROC\nTo see all six address levels it is sufficient to activate Pixel 5 12"""
+        self.enable_single_pixel(col, row)
         self.window = PxarGui(gClient.GetRoot(), 800, 800)
-        plotdata = self.address_level_scan()
-        x = 0
-        for i in range(1024):
-            if plotdata[i] != 0:
-                if i - x != 1:
-                    print "\n"
-                print i - 500, " ", plotdata[i]
-                x = i
-        print '[',
-        for i in range(1024):
-            print '%d,' % plotdata[i],
-        print ']'
-        plot = Plotter.create_th1(plotdata, -512, +512, "Address Levels", "ADC", "#")
+        plotdata = self.address_level_scan(10000, offset)
+        plot = Plotter.create_th1(plotdata[roc], -512, +512, "Address Levels", "ADC", "#")
         self.window.histos.append(plot)
         self.window.update()
 
@@ -1649,12 +1726,12 @@ class PxarCoreCmd(cmd.Cmd):
     def do_findAnalogueTBDelays(self):
         """findAnalogueTBDelays: configures tindelay and toutdelay"""
         self.api.setTestboardDelays({'tindelay': 0, 'toutdelay': 20})
-        self.enable_all()
+        self.api.maskAllPixels(1)
         data = None
         while data is None:
             data = self.daq_converted_raw()
-        tin = data.index(min(data))
-        tout = 20 - (len(data) - tin - 3)
+        tin = data.index(next(word for word in data if word < 2 * mean(data)))
+        tout = 20 - (len(data) - tin - 3 * self.api.getNRocs())
         self.api.setTestboardDelays({'tindelay': tin, 'toutdelay': tout})
         print 'set tindelay to:  ', tin
         print 'set toutdelay to: ', tout
@@ -2552,44 +2629,116 @@ class PxarCoreCmd(cmd.Cmd):
         # return help for the cmd
         return [self.do_find_phscale.__doc__, '']
 
-    @arity(0, 1, [int])
-    def do_averaged_levels(self, averaging=1000):
+    # @arity(0, 1, [int])
+    # def do_averaged_levels(self, averaging=1000):
+    #     """ None """
+    #     self.enable_pix(5, 12)
+    #     self.api.daqStart()
+    #     self.api.daqTrigger(averaging, 500)
+    #     averaged_event = [[0], [0]]
+    #     for i in range(8):
+    #         averaged_event[0].append(0)
+    #         averaged_event[1].append(0)
+    #     sleep(0.1)
+    #     for i in range(averaging):
+    #         event = self.converted_raw_event()
+    #         for j in range(9):
+    #             averaged_event[0][j] += event[j]
+    #     self.api.daqStop()
+    #     self.api.maskAllPixels(1, 0)
+    #     self.api.testAllPixels(0, 0)
+    #     self.enable_pix(5, 12, 1)
+    #     self.api.daqStart()
+    #     self.api.daqTrigger(averaging, 500)
+    #     for i in range(averaging):
+    #         event = self.converted_raw_event()
+    #         for j in range(3, 12):
+    #             averaged_event[1][j - 3] += event[j]
+    #     self.api.daqStop()
+    #     for i in range(9):
+    #         averaged_event[0][i] /= averaging
+    #         averaged_event[1][i] /= averaging
+    #     print averaged_event[0]
+    #     print averaged_event[1]
+    #
+    # def complete_averaged_levels(self):
+    #     # return help for the cmd
+    #     return [self.do_averaged_levels.__doc__, '']
+
+    @arity(0, 3, [int, int, int])
+    def do_averaged_levels(self, col=5, row=12, averaging=1000):
         """ None """
-        self.enable_pix(5, 12)
+        self.enable_single_pixel(col, row)
         self.api.daqStart()
-        self.api.daqTrigger(averaging, 500)
-        averaged_event = [[0], [0]]
-        for i in range(8):
-            averaged_event[0].append(0)
-            averaged_event[1].append(0)
-        sleep(0.1)
-        for i in range(averaging):
-            event = self.converted_raw_event()
-            for j in range(9):
-                averaged_event[0][j] += event[j]
+        for i, lst in enumerate(self.get_mean_levels(averaging)):
+            print 'ROC {}: {}'.format(i, ' '.join(['{0:3.1f}'.format(i) for i in lst]))
         self.api.daqStop()
-        self.api.maskAllPixels(1, 0)
-        self.api.testAllPixels(0, 0)
-        self.enable_pix(5, 12, 1)
-        self.api.daqStart()
-        self.api.daqTrigger(averaging, 500)
-        for i in range(averaging):
-            event = self.converted_raw_event()
-            for j in range(3, 12):
-                averaged_event[1][j - 3] += event[j]
-        self.api.daqStop()
-        for i in range(9):
-            averaged_event[0][i] /= averaging
-            averaged_event[1][i] /= averaging
-        print averaged_event[0]
-        print averaged_event[1]
 
     def complete_averaged_levels(self):
         # return help for the cmd
         return [self.do_averaged_levels.__doc__, '']
 
     @arity(0, 1, [int])
-    def do_adjust_black(self, rocs=4, avg=100):
+    def do_find_offset(self, roc=0):
+        """ None """
+        n = 1000
+        self.find_decoding_offset(roc)
+
+    def complete_find_offset(self):
+        # return help for the cmd
+        return [self.do_find_offset.__doc__, '']
+
+    @arity(0, 1, [int])
+    def do_adjust_black_levels(self, avg=100):
+        # self.api.maskAllPixels(1)
+        self.api.daqStart()
+        phscale0 = 90
+        for roc in xrange(1, self.api.getNRocs()):
+            for phscale in xrange(phscale0, 256):
+                self.api.setDAC('phscale', phscale, roc)
+                b, ub = self.get_mean_black_levels(avg)
+                print roc, phscale, b[roc]
+                if ub[roc] < ub[0]:
+                    break
+        self.api.daqStop()
+
+    def complete_adjust_black_levels(self):
+        # return help for the cmd
+        return [self.do_averaged_levels.__doc__, '']
+
+    @arity(0, 1, [int])
+    def do_mean_black_levels(self, avg=100):
+        # self.api.maskAllPixels(1)
+        self.api.daqStart()
+        b, ub = self.get_mean_black_levels(avg)
+        print 'ROC  {}'.format('     '.join(str(w) for w in range(len(b))))
+        print 'UB  {}'.format(' '.join(['{0:3.1f}'.format(i) for i in b]))
+        print 'B   {}'.format(' '.join(['{0:3.1f}'.format(i) for i in ub]))
+        self.api.daqStop()
+
+    def complete_mean_black_levels(self):
+        # return help for the cmd
+        return [self.do_averaged_levels.__doc__, '']
+
+    @arity(5, 5, [int, int, int, int, int])
+    def do_get_addresses(self, a, b, c, d, e):
+        print self.get_addresses([a, b, c, d ,e])
+
+    @arity(0, 4, [int, int, int, int])
+    def do_decode(self, col=5, row=12, roc=0, offset=0):
+        self.enable_single_pixel(col, row)
+        event = self.daq_converted_raw()
+        print event, event[roc * 9:(roc + 1) * 9]
+        levels = self.translate_levels(event[roc * 9:(roc + 1) * 9], offset=offset)
+        print levels
+        print self.get_addresses(levels)
+
+    @arity(0, 0, [])
+    def do_splittings(self):
+        self.save_splittings()
+
+    @arity(0, 1, [int])
+    def do_dadjust_black(self, rocs=4, avg=100):
         """ None """
         self.api.maskAllPixels(1)
         self.api.testAllPixels(0)
