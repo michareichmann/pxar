@@ -168,30 +168,37 @@ namespace pxar {
     int16_t eventID;
 
     // Analog level averaging:
-    void AverageAnalogLevel(int32_t &variable, int16_t dataword);
+    void AverageAnalogLevel(int16_t word1, int16_t word2, int16_t roc_n);
+    std::vector<float> ultraBlack, black;
+    std::vector<int16_t> levelS;
+    std::vector<size_t> slidingWindow;
+    uint8_t offsetB;
 
     /** Fixed level thresholds */
     bool hasThresholds;
     std::vector<std::vector<float> > thresholds;
+
     // Last DAC storage for analog ROCs:
     void evalLastDAC(uint8_t roc, uint16_t val);
-    int32_t ultrablack;
-    int32_t black;
-    int32_t counter;
-    int64_t sumB;
-    int64_t sumUB;
-    float meanB;
-    float meanUB;
-    uint8_t offsetB;
 
+    // Debugging mechanism for problematic events
+    uint32_t total_event, flawed_event, error_count, dump_count;
+    std::vector<std::string> event_ringbuffer;
 
-public:
+  public:
+    dtbEventDecoder() : decodingStats(), count(), shiftReg(), readback(), eventID(-1), offsetB(0), hasThresholds(false), total_event(5), flawed_event(0),
+                        error_count(0), dump_count(0), event_ringbuffer(7) {
 
-    dtbEventDecoder():  decodingStats(), readback(), eventID(-1), ultrablack(0xfff), black(0xfff),
-                        counter(0), sumB(0), sumUB(0), meanB(0), meanUB(0), offsetB(20) {};
+      /** initialise vectors */
+      ultraBlack.resize(16, 0);
+      black.resize(16, 0);
+      slidingWindow.resize(16, 0);
+      levelS.resize(16, 0);
+    };
     void Clear() { decodingStats.clear(); readback.clear(); count.clear(); shiftReg.clear(); eventID = -1; };
     void setOffset(uint8_t decodingOffset) { offsetB = decodingOffset; }
     void setThresholds(const std::vector<std::vector<float> > values) { thresholds = values; hasThresholds = bool(!values.empty()); }
+    bool foundHeader(int16_t, int16_t, int16_t);
 
     statistics getStatistics();
     std::vector<std::vector<uint16_t> > getReadback();

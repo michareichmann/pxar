@@ -315,49 +315,39 @@ namespace pxar {
     int16_t roc_n = -1;
 
     // Reserve expected number of pixels from data length (subtract ROC headers):
-    if (sample->GetSize() - 3*GetTokenChainLength() > 0) {
+    if (static_cast<int>(sample->GetSize()) - 3*GetTokenChainLength() > 0) {
       roc_Event.pixels.reserve((sample->GetSize() - 3*GetTokenChainLength())/6);
     }
 
     // Loop over the full data:
     for(std::vector<uint16_t>::iterator word = sample->data.begin(); word != sample->data.end(); word++) {
 
-
-        // Not enough data for anything, stop here - and assume it was half a pixel hit:
-        if((sample->data.end() - word < 2)) {
-            decodingStats.m_errors_pixel_incomplete++;
-            break;
-        }
-
-        // Check if we have another ROC header (UB and B levels):
-        // Here we have to assume the first two words are a ROC header because we rely on
-        // its Ultrablack and Black level as initial values for auto-calibration:
-        int16_t levelS = (black - ultrablack)/8;
-
-		//std::cout << black << " " << expandSign((*(word+1)) & 0x0fff) << " " << roc_n << std::endl;
-        if(roc_n < 0 ||
-        // Ultrablack level:
-        /** little fix if the UB in the telescope is too small --> levelS*3 */
-        ((ultrablack - levelS * 2 < expandSign(*word & 0x0fff) && ultrablack + levelS * 2 > expandSign(*word & 0x0fff))
-         // Black level:
-         && (black - levelS < offsetB + expandSign(*(word + 1) & 0x0fff) && black + levelS > offsetB + expandSign(*(word + 1) & 0x0fff)))) {
-
-            roc_n++;
-            // Save the lastDAC value:
-            evalLastDAC(roc_n, (*(word+2)) & 0x0fff);
-
-            // Iterate to improve ultrablack and black measurement:
-            AverageAnalogLevel(ultrablack, (*word) & 0x0fff);
-            AverageAnalogLevel(black, (*(word+1)) & 0x0fff);
-
-            LOG(logDEBUGPIPES) << "ROC Header: "
-                       << expandSign((*word) & 0x0fff) << " (avg. " << ultrablack << ") (UB) "
-                       << expandSign((*(word+1)) & 0x0fff) << " (avg. " << black << ") (B) "
-                       << expandSign((*(word+2)) & 0x0fff) << " (lastDAC) ";
-            // Advance iterator:
-            word +=  2;
+      // Not enough data for anything, stop here - and assume it was half a pixel hit:
+      if((sample->data.end() - word < 2)) {
+        decodingStats.m_errors_pixel_incomplete++;
+        break;
       }
-      // We have a pixel hit:
+
+      // Check if we have another ROC header (UB and B levels):
+      // Here we have to assume the first two words are a ROC header because we rely on
+      // its Ultrablack and Black level as initial values for auto-calibration:
+
+      if (roc_n < 0 || foundHeader(roc_n, *word & 0x0fff, *(word + 1) & 0x0fff)) {
+        roc_n++;
+        // Save the lastDAC value:
+        evalLastDAC(roc_n, (*(word+2)) & 0x0fff);
+
+        // Iterate to improve ultrablack and black measurement:
+        AverageAnalogLevel((*word) & 0x0fff, (*(word+1)) & 0x0fff, roc_n);
+
+        LOG(logDEBUGPIPES)  << "ROC Header: "
+                            << expandSign((*word) & 0x0fff) << " (avg. " << ultraBlack.at(roc_n + 1) << ") (UB) "
+                            << expandSign((*(word+1)) & 0x0fff) << " (avg. " << black.at(roc_n + 1) << ") (B) "
+                            << expandSign((*(word+2)) & 0x0fff) << " (lastDAC) ";
+        // Advance iterator:
+        word +=  2;
+      }
+        // We have a pixel hit:
       else {
         // Not enough data for a new pixel hit (six words):
         if(sample->data.end() - word < 6) {
@@ -371,22 +361,22 @@ namespace pxar {
 
         try{
 //            std::cout << "ROC " << roc_n << std::endl;
-            LOG(logDEBUGPIPES) << "Trying to decode pixel: " << listVector(data, false, true);
-            if (hasThresholds){
-              pixel pix(data, roc_n, thresholds.at(roc_n));
-              roc_Event.pixels.push_back(pix);
-            }
-            else {
-              pixel pix(data, roc_n, int16_t(ultrablack), int16_t(black));
-              roc_Event.pixels.push_back(pix);
-            }
-            decodingStats.m_info_pixels_valid++;
-            }
-            catch(DataDecodingError /*&e*/){
-                // decoding of raw address lead to invalid address
-                decodingStats.m_errors_pixel_address++;
-            }
+          LOG(logDEBUGPIPES) << "Trying to decode pixel: " << listVector(data, false, true);
+          if (hasThresholds){
+            pixel pix(data, roc_n, thresholds.at(roc_n));
+            roc_Event.pixels.push_back(pix);
+          }
+          else {
+            pixel pix(data, roc_n, int16_t(ultraBlack.at(roc_n)), int16_t(black.at(roc_n)));
+            roc_Event.pixels.push_back(pix);
+          }
+          decodingStats.m_info_pixels_valid++;
         }
+        catch(DataDecodingError /*&e*/){
+          // decoding of raw address lead to invalid address
+          decodingStats.m_errors_pixel_address++;
+        }
+      }
     }
 
     // Check event validity (empty, missing ROCs...):
@@ -495,7 +485,6 @@ namespace pxar {
         else {
             for (uint16_t i(0); i< sample->GetSize(); i++)
                 std::cout << expandSign((*sample)[i] & 0x0fff) << " ";
-            std::cout << "\nBLACK: " << black << "\tULTRABLACK: " << ultrablack << "\n";
             LOG(logERROR) << "Number of ROCs (" << static_cast<int>(roc_n+1)
 		    << ") != Token Chain Length (" << static_cast<int>(GetTokenChainLength()) << ")";
         }
@@ -515,34 +504,30 @@ namespace pxar {
     }
   }
 
-  void dtbEventDecoder::AverageAnalogLevel(int32_t &variable, int16_t dataword) {
-    /**translate the measurement to a meaningful level*/
-    int16_t translateDataword = expandSign(dataword & 0x0fff);
+  void dtbEventDecoder::AverageAnalogLevel(int16_t word1, int16_t word2, int16_t roc_n) {
 
-    /** take the mean for a given windowsize, initial measurement included */
-    int32_t windowSize = 1000;
-    if (counter<windowSize){
-      if (&variable == &ultrablack){
-	sumUB += translateDataword;
-	counter++;
-	meanUB = float(sumUB)/counter;
-      }
-      else if (&variable == &black){
-	sumB += translateDataword;
-	meanB = float(sumB)/counter;
-      }
-      variable = (&variable == &ultrablack) ? int(meanUB) : int(meanB + offsetB);
-    }
-    /**sliding window*/
-    else {
-      if (&variable == &ultrablack){
-	meanUB = (float(windowSize)-1)/windowSize*meanUB + float(1)/windowSize*translateDataword ;
-      }
-      else if (&variable == &black){
-	meanB = (float(windowSize)-1)/windowSize*meanB + float(1)/windowSize*translateDataword ;
-      }
-      variable = (&variable == &ultrablack) ? int(meanUB) : int(meanB + offsetB);
-    }
+    ultraBlack.at(roc_n) = expandSign(word1 & 0x0fff);
+    black.at(roc_n) = expandSign(word2 & 0x0fff) + offsetB;
+//    // Take the mean for a window of 1000 samples, initial measurement included
+//    if(slidingWindow.at(roc_n) < 1000) {
+//      slidingWindow.at(roc_n)++;
+//      ultraBlack.at(roc_n) += (expandSign(word1 & 0x0fff) - ultraBlack.at(roc_n)) / slidingWindow.at(roc_n);
+//      black.at(roc_n) += (expandSign(word2 & 0x0fff) + offsetB - black.at(roc_n)) / slidingWindow.at(roc_n);
+//    }
+//    // Sliding window:
+//    else {
+//      ultraBlack.at(roc_n) = 999. / 1000 * ultraBlack.at(roc_n) + 1. / 1000 * expandSign(word1 & 0x0fff);
+//      black.at(roc_n) = 999. / 1000 * black.at(roc_n) + 1. / 1000 * (expandSign(word2 & 0x0fff) + offsetB);
+//    }
+    levelS.at(roc_n) = static_cast<int16_t>((int(black.at(roc_n)) - int(ultraBlack.at(roc_n))) / 8);
+  }
+
+  bool dtbEventDecoder::foundHeader(int16_t roc_n, int16_t word1, int16_t word2){
+    if (not slidingWindow.at(roc_n + 1))
+      return (roc_n + 1 == 0) ? true : (expandSign(word1) < ultraBlack.at(0) + 2 * levelS.at(0));
+    bool foundUB = (ultraBlack.at(roc_n + 1) - levelS.at(roc_n + 1) * 2 < expandSign(word1) && ultraBlack.at(roc_n + 1) + levelS.at(roc_n + 1) * 2 > expandSign(word1));
+    bool foundB = (black.at(roc_n + 1) - levelS.at(roc_n + 1) < offsetB + expandSign(word2) && black.at(roc_n + 1) + levelS.at(roc_n + 1) > offsetB + expandSign(word2));
+    return foundB and foundUB;
   }
 
   void dtbEventDecoder::evalLastDAC(uint8_t roc, uint16_t val) {
