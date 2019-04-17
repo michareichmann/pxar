@@ -583,6 +583,18 @@ class CLIX:
         self.daq_stop()
         BREAK = False
 
+    def adjust_black_levels(self, avg=100):
+        self.api.daqStart()
+        self.api.maskAllPixels(1)
+        n_rocs = self.api.getNRocs()
+        self.api.daqTrigger(avg, 500)
+        events = [self.daq_get_raw_event() for _ in xrange(avg)]
+        b_levels = [[event[i] for event in events] for i in xrange(1, 3 * n_rocs, 3)]
+        ub_levels = [[event[i] for event in events] for i in xrange(0, 3 * n_rocs, 3)]
+        b = [mean(l) for l in b_levels]
+        ub = [mean(l) for l in ub_levels]
+        print b, ub
+
 
 def set_palette(custom=True, pal=1):
     if custom:
