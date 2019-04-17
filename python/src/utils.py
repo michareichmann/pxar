@@ -95,3 +95,19 @@ def do(fs, pars, exe=-1):
     exe = pars if exe == -1 else [exe]
     for f, p, e in zip(fs, pars, exe):
         f(p) if e is not None else do_nothing()
+
+
+def calculate_column(c0, c1, r0):
+    return 2 * (6 * c1 + c0) + (r0 & 1)
+
+
+def calculate_row(r0, r1, r2):
+    return 80 - (36 * r2 + 6 * r1 + r0) / 2
+
+
+def calculate_col_row(c1, c0, r2, r1, r0):
+    return calculate_column(c0, c1, r0), calculate_row(r0, r1, r2)
+
+
+def bit_shift(value, shift):
+    return (value >> shift) & 0b0111
