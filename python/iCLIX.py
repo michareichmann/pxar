@@ -113,10 +113,9 @@ class CLIX:
         bin_str = bin(value)[2:].zfill(6 * 4)
         print '   ' + ' '.join([bin_str[i:i + 3] for i in xrange(0, 5 * 3, 3)])
         print '   ' + ' '.join([' {} '.format(int(bin_str[i:i+3], 2)) for i in xrange(0, 5 * 3, 3)])
-        print '\ncol = 2 * (6 * C1 + C0) + (R1 & 1)'
+        print '\ncol = 2 * (6 * C1 + C0) + (R0 & 1)'
         print 'row = 80 - (36 * R2 + 6 * R1 + R0) / 2'
-        col = 2 * (6 * bit_shift(value, 21) + bit_shift(value, 18)) + (bit_shift(value, 9) & 1)
-        row = 80 - (36 * bit_shift(value, 15) + 6 * bit_shift(value, 12) + bit_shift(value, 9)) / 2
+        col, row = calculate_col_row(bit_shift(value, 21), bit_shift(value, 18), bit_shift(value, 15), bit_shift(value, 12), bit_shift(value, 9))
         ph = (value & 0x000f) + ((value >> 1) & 0x00f0)
         return row, col, ph
 
@@ -597,14 +596,6 @@ def set_palette(custom=True, pal=1):
         gStyle.SetPalette(len(color_table), color_table)
     else:
         gStyle.SetPalette(pal)
-
-
-def do_nothing():
-    pass
-
-
-def bit_shift(value, shift):
-    return (value >> shift) & 0b0111
 
 
 if __name__ == '__main__':
