@@ -614,7 +614,7 @@ if __name__ == '__main__':
     # command line argument parsing
 
     parser = ArgumentParser(prog=prog_name, description="A Simple Command Line Interface to the pxar API.")
-    parser.add_argument('--dir', '-d', metavar="DIR", help="The digit rectory with all required config files.")
+    parser.add_argument('dir', metavar="DIR", help="The digit rectory with all required config files.", nargs='?', default='.')
     parser.add_argument('--run', '-r', metavar="FILE", help="Load a cmdline script to be executed before entering the prompt.", default='')
     parser.add_argument('--verbosity', '-v', metavar="LEVEL", default="INFO", help="The output verbosity set in the pxar API.")
     parser.add_argument('--trim', '-T', nargs='?', default=None, help="The output verbosity set in the pxar API.")
@@ -624,7 +624,8 @@ if __name__ == '__main__':
     print_banner('# STARTING ipython pXar Command Line Interface')
 
     # start command line
-    z = CLIX(args.dir, args.verbosity, args.trim)
+    d = '.' if not args.dir else args.dir
+    z = CLIX(d, args.verbosity, args.trim)
     if args.wbc:
         z.wbc_scan()
         raw_input('Enter any key to close the program')
