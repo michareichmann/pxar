@@ -1104,7 +1104,7 @@ class PxarCoreCmd(cmd.Cmd):
     @arity(1, 2, [str, int])
     def do_daqTriggerSource(self, source, freq=0):
         """daqTriggerSource: select the trigger source to be used for the DAQ session"""
-        if self.api.daqTriggerSource(source, 40000000 / freq):
+        if self.api.daqTriggerSource(source, 40000000 / freq if freq else 0):
             print "Trigger source \"" + source + "\" selected."
         else:
             print "DAQ returns faulty state."
@@ -1155,6 +1155,8 @@ class PxarCoreCmd(cmd.Cmd):
         elif convert == 3:
             data = self.converted_raw_event()
             print "UB", data[0], "\tlength", len(data)
+        elif convert == 4:
+            print ' '.join(hex(word)[2:].rjust(4, '0') for word in self.api.daqGetRawEvent())
 
     def complete_daqGetRawEvent(self, text, line, start_index, end_index):
         # return help for the cmd
@@ -1198,6 +1200,19 @@ class PxarCoreCmd(cmd.Cmd):
             for i in data:
                 print i
                 # self.plot_eventdisplay(data)
+        except RuntimeError:
+            pass
+
+    def complete_daqGetEventBuffer(self):
+        # return help for the cmd
+        return [self.do_daqGetEventBuffer.__doc__, '']
+
+    @arity(0, 0, [])
+    def do_buffer_length(self):
+        """daqGetEventBuffer: read all decoded events from the DTB buffer"""
+        try:
+            data = self.api.daqGetEventBuffer()
+            print len(data)
         except RuntimeError:
             pass
 
