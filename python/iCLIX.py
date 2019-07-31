@@ -6,12 +6,16 @@
 from os.path import basename, dirname, realpath, join
 from subprocess import call
 from sys import argv, path, stdout
+from os import _exit as terminate
+
 BREAK = False
+z = None
 import signal
 def signal_handler(signal, frame):
-    global BREAK
+    global BREAK, z
     print("\nprogram exiting gracefully")
     BREAK = True
+    terminate(5)
 
 signal.signal(signal.SIGINT, signal_handler)
 
@@ -73,7 +77,7 @@ class CLIX:
     def run(filename):
         print '\nReading commands from file...\n'
         if not file_exists(filename):
-            'File {} does not exit'.format(filename)
+            'File {} does not exist'.format(filename)
         f = open(filename)
         for line in f.readlines():
             if line.startswith('#'):
@@ -217,6 +221,10 @@ class CLIX:
         self.set_tb_delay('ctr', value)
         self.set_tb_delay('sda', value + (15 if 'dig' in self.api.getRocType() else 11))
         self.set_tb_delay('tin', value + (5 if 'dig' in self.api.getRocType() else 2))
+
+    def set_external_clock(self, status=True):
+        """setExternalClock [status]: enables the external DTB clock input, switches off the internal clock. Only switches if external clock is present."""
+        print 'using {} clock {}'.format('external' if status else 'internal', 'failed' if not self.api.setExternalClock(status) else '')
 
     def set_pg(self, cal=True, res=True, trg=True, delay=None):
         """ Sets up the trigger pattern generator for ROC testing """
@@ -427,6 +435,7 @@ class CLIX:
         self.api.HVon()
         print 'Setting trigger source to "extern"'
         self.api.daqTriggerSource('extern')
+        self.api.SignalProbe('a1', 'sdata2')
         self.api.daqStart()
 
         trigger_phases = zeros(10)
