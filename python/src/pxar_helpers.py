@@ -12,7 +12,7 @@ from collections import OrderedDict
 from datetime import datetime
 from ConfigParser import ConfigParser
 from json import loads
-from utils import info
+from utils import info, critical
 
 # "arity": decorator used for parameter parsing/verification on each cmd function call
 # Usually, the cmd module only passes a single string ('line') with all parameters;
@@ -378,7 +378,11 @@ def PxarStartup(directory, verbosity, trim=None):
             ("PG_CAL",pgcal),
             ("PG_TRG",0))
        # Start an API instance from the core pxar library
-    api = PyPxarCore(usbId=config.get("testboardName"),logLevel=verbosity)
+    try:
+        api = PyPxarCore(usbId=config.get("testboardName"),logLevel=verbosity)
+    except RuntimeError as e:
+        critical(e)
+        return
     print api.getVersion()
     if not api.initTestboard(pg_setup = pg_setup, power_settings = power_settings, sig_delays = tbparameters.getAll()):
         print "WARNING: could not init DTB -- possible firmware mismatch."

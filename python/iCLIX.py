@@ -6,12 +6,16 @@
 from os.path import basename, dirname, realpath, join
 from subprocess import call
 from sys import argv, path, stdout
+from os import _exit as terminate
+
 BREAK = False
+z = None
 import signal
 def signal_handler(signal, frame):
-    global BREAK
+    global BREAK, z
     print("\nprogram exiting gracefully")
     BREAK = True
+    terminate(5)
 
 signal.signal(signal.SIGINT, signal_handler)
 
@@ -73,7 +77,7 @@ class CLIX:
     def run(filename):
         print '\nReading commands from file...\n'
         if not file_exists(filename):
-            'File {} does not exit'.format(filename)
+            'File {} does not exist'.format(filename)
         f = open(filename)
         for line in f.readlines():
             if line.startswith('#'):
@@ -113,10 +117,9 @@ class CLIX:
         bin_str = bin(value)[2:].zfill(6 * 4)
         print '   ' + ' '.join([bin_str[i:i + 3] for i in xrange(0, 5 * 3, 3)])
         print '   ' + ' '.join([' {} '.format(int(bin_str[i:i+3], 2)) for i in xrange(0, 5 * 3, 3)])
-        print '\ncol = 2 * (6 * C1 + C0) + (R1 & 1)'
+        print '\ncol = 2 * (6 * C1 + C0) + (R0 & 1)'
         print 'row = 80 - (36 * R2 + 6 * R1 + R0) / 2'
-        col = 2 * (6 * bit_shift(value, 21) + bit_shift(value, 18)) + (bit_shift(value, 9) & 1)
-        row = 80 - (36 * bit_shift(value, 15) + 6 * bit_shift(value, 12) + bit_shift(value, 9)) / 2
+        col, row = calculate_col_row(bit_shift(value, 21), bit_shift(value, 18), bit_shift(value, 15), bit_shift(value, 12), bit_shift(value, 9))
         ph = (value & 0x000f) + ((value >> 1) & 0x00f0)
         return row, col, ph
 
@@ -218,6 +221,10 @@ class CLIX:
         self.set_tb_delay('ctr', value)
         self.set_tb_delay('sda', value + (15 if 'dig' in self.api.getRocType() else 11))
         self.set_tb_delay('tin', value + (5 if 'dig' in self.api.getRocType() else 2))
+
+    def set_external_clock(self, status=True):
+        """setExternalClock [status]: enables the external DTB clock input, switches off the internal clock. Only switches if external clock is present."""
+        print 'using {} clock {}'.format('external' if status else 'internal', 'failed' if not self.api.setExternalClock(status) else '')
 
     def set_pg(self, cal=True, res=True, trg=True, delay=None):
         """ Sets up the trigger pattern generator for ROC testing """
@@ -428,6 +435,7 @@ class CLIX:
         self.api.HVon()
         print 'Setting trigger source to "extern"'
         self.api.daqTriggerSource('extern')
+        self.api.SignalProbe('a1', 'sdata2')
         self.api.daqStart()
 
         trigger_phases = zeros(10)
@@ -584,6 +592,18 @@ class CLIX:
         self.daq_stop()
         BREAK = False
 
+    def adjust_black_levels(self, avg=100):
+        self.api.daqStart()
+        self.api.maskAllPixels(1)
+        n_rocs = self.api.getNRocs()
+        self.api.daqTrigger(avg, 500)
+        events = [self.daq_get_raw_event() for _ in xrange(avg)]
+        b_levels = [[event[i] for event in events] for i in xrange(1, 3 * n_rocs, 3)]
+        ub_levels = [[event[i] for event in events] for i in xrange(0, 3 * n_rocs, 3)]
+        b = [mean(l) for l in b_levels]
+        ub = [mean(l) for l in ub_levels]
+        print b, ub
+
 
 def set_palette(custom=True, pal=1):
     if custom:
@@ -599,19 +619,11 @@ def set_palette(custom=True, pal=1):
         gStyle.SetPalette(pal)
 
 
-def do_nothing():
-    pass
-
-
-def bit_shift(value, shift):
-    return (value >> shift) & 0b0111
-
-
 if __name__ == '__main__':
     # command line argument parsing
 
     parser = ArgumentParser(prog=prog_name, description="A Simple Command Line Interface to the pxar API.")
-    parser.add_argument('--dir', '-d', metavar="DIR", help="The digit rectory with all required config files.")
+    parser.add_argument('dir', metavar="DIR", help="The digit rectory with all required config files.", nargs='?', default='.')
     parser.add_argument('--run', '-r', metavar="FILE", help="Load a cmdline script to be executed before entering the prompt.", default='')
     parser.add_argument('--verbosity', '-v', metavar="LEVEL", default="INFO", help="The output verbosity set in the pxar API.")
     parser.add_argument('--trim', '-T', nargs='?', default=None, help="The output verbosity set in the pxar API.")
@@ -621,7 +633,8 @@ if __name__ == '__main__':
     print_banner('# STARTING ipython pXar Command Line Interface')
 
     # start command line
-    z = CLIX(args.dir, args.verbosity, args.trim)
+    d = '.' if not args.dir else args.dir
+    z = CLIX(d, args.verbosity, args.trim)
     if args.wbc:
         z.wbc_scan()
         raw_input('Enter any key to close the program')
