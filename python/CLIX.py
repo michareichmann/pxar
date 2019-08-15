@@ -1661,12 +1661,11 @@ class PxarCoreCmd(cmd.Cmd):
     def do_enableBlock(self, right=3, up=None, row=3, col=3):
         """enableBlock [right=3] [up=right] [row=3] [col=3] : unmask all Pixels; starting from row and col enable block of size up * right"""
         up = right if up is None else up
-        self.api.maskAllPixels(0)
-        self.api.testAllPixels(1)
+        self.api.maskAllPixels(1)
         print '--> mask and enable all pixels!'
         for i in range(right):
             for j in range(up):
-                self.api.maskPixel(i + col, j + row, 1)
+                self.api.maskPixel(i + col, j + row, 0)
         print '--> unmask Block from {c}/{r} to {c1}/{r1}'.format(c=col, r=row, c1=col + right, r1=row + up)
         self.print_activated()
 

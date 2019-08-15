@@ -543,7 +543,7 @@ class CLIX:
         return self.hitmap(t, random_trigger=True, n=n)
 
     def hitmap_trigger(self, t, wbc=123):
-        return self.hitmap(t, random_trigger=False)
+        return self.hitmap(t, random_trigger=False, wbc=wbc)
 
     def load_mask(self, file_name):
         f = open(file_name, 'r')
