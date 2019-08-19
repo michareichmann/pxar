@@ -456,69 +456,54 @@ class CLIX:
         self.api.daqStart()
 
         trigger_phases = zeros(10)
-        yields = OrderedDict([(roc, {wbc: 0 for wbc in xrange(min_wbc, max_wbc)}) for roc in xrange(self.api.getNEnabledRocs())])
-        set_dacs = {roc: False for roc in yields}
-        print '\nROC EVENT YIELDS:\n  wbc\t{r}'.format(r='\t'.join(('roc' + str(yld)).rjust(6) for yld in yields.keys()))
+        yields = OrderedDict((wbc, zeros(self.get_n_rocs())) for wbc in xrange(min_wbc, max_wbc))
+        print '\nROC EVENT YIELDS:\n  wbc\t{r}'.format(r='\t'.join(('roc{}'.format(i)).rjust(6) for i in xrange(self.get_n_rocs())))
 
-        # loop over wbc
-        for wbc in xrange(min_wbc, max_wbc):
+        for wbc in xrange(min_wbc, max_wbc):  # loop over wbc
             self.clear_buffer()
             self.api.setDAC('wbc', wbc)
-
-            # loop until you find nTriggers
-            n_triggers = 0
-            while n_triggers < max_triggers:
-                try:
-                    data = self.api.daqGetEvent()
-                    if data.header:
-                        trigger_phases[data.triggerPhases[0]] += 1
-                        for roc in set([pix.roc for pix in data.pixels]):
-                            yields[roc][wbc] += 1. * 100. / max_triggers
-                        n_triggers += 1
-                except RuntimeError:
-                    pass
-            y_strings = ['{y:5.1f}%'.format(y=yld) for yld in [yields[roc][wbc] for roc in yields.iterkeys()]]
-            print '  {w:03d}\t{y}'.format(w=wbc, y='\t'.join(y_strings))
+            for event in self.get_data(max_triggers):
+                trigger_phases[event.triggerPhases[0]] += 1
+                for roc in set([pix.roc for pix in event.pixels]):
+                    yields[wbc][roc] += 100. / max_triggers
+            print '  {:03d}\t{}'.format(wbc, '\t'.join(['{:5.1f}%'.format(v) for v in yields[wbc]]))
 
             # stopping criterion
-            best_wbc = max_wbc
-            if wbc > min_wbc + 3:
-                for roc, ylds in yields.iteritems():
-                    if any(yld > 10 for yld in ylds.values()[:wbc - min_wbc - 2]):
-                        best_wbc = ylds.keys()[ylds.values().index(max(ylds.values()))]
-                        print 'set wbc of roc {i} to {v}'.format(i=roc, v=best_wbc)
-                        self.api.setDAC('wbc', best_wbc, roc)
-                        set_dacs[roc] = True
-                if all(set_dacs.itervalues()):
-                    print 'found all wbcs'
-
-                    for roc, dic in yields.iteritems():
-                        keys = dic.keys()
-                        for key in keys:
-                            if key >= best_wbc + 4:
-                                yields[roc].pop(key)
-                    break
+            if wbc > min_wbc + 3 and any(yld > 10 for yld in yields[wbc - 2]):
+                break
+        for roc in xrange(self.get_n_rocs()):
+            self.api.setDAC('wbc', max(yields, key=lambda x: yields[x][roc]), roc)
         self.api.daqStop()
 
-        # triggerphase
-
+        # trigger_phase
         print '\nTRIGGER PHASE:'
         for i, trigger_phase in enumerate(trigger_phases):
             if trigger_phase:
                 percentage = trigger_phase * 100 / sum(trigger_phases)
                 print '{i}\t{d} {v:2.1f}%'.format(i=i, d=int(round(percentage)) * '|', v=percentage)
 
-        # plot wbc_scan
-        mg = TMultiGraph('mg_wbc', 'WBC Scans for all ROCs')
-        colors = range(1, len(yields) + 1)
-        leg = Plotter.create_legend(nentries=len(yields), x1=.7)
-        for i, (roc, dic) in enumerate(yields.iteritems()):
-            gr = Plotter.create_graph(x=dic.keys(), y=dic.values(), tit='wbcs for roc {r}'.format(r=roc), xtit='wbc', ytit='yield [%]', color=colors[i])
-            leg.AddEntry(gr, 'roc{r}'.format(r=roc), 'lp')
-            mg.Add(gr, 'lp')
-        self.Plotter.plot_histo(mg, draw_opt='a', l=leg)
-        mg.GetXaxis().SetTitle('WBC')
-        mg.GetYaxis().SetTitle('Yield [%]')
+        self.plot_wbc(yields, plot)
+
+    def plot_wbc(self, yields, show=True):
+        if show:
+            mg = TMultiGraph('mg_wbc', 'WBC Scans for all ROCs')
+            colors = range(1, len(yields) + 1)
+            leg = Plotter.create_legend(nentries=self.get_n_rocs(), x1=.7)
+            try:
+                x_min = next(key for key, value in yields.iteritems() if any(v > 0 for v in value)) - 1
+                x_max = next(key for key, value in OrderedDict(reversed(yields.items())).iteritems() if any(v > 0 for v in value)) + 2
+            except StopIteration:
+                print 'all zero...'
+                return
+            for roc in xrange(self.get_n_rocs()):
+                x_vals = xrange(x_min, x_max)
+                y_vals = [yields[wbc][roc] for wbc in x_vals]
+                gr = Plotter.create_graph(x=x_vals, y=y_vals, tit='wbcs for roc {r}'.format(r=roc), xtit='wbc', ytit='yield [%]', color=colors[roc])
+                leg.AddEntry(gr, 'roc{r}'.format(r=roc), 'lp')
+                mg.Add(gr, 'lp')
+            self.Plotter.plot_histo(mg, draw_opt='a', l=leg)
+            mg.GetXaxis().SetTitle('WBC')
+            mg.GetYaxis().SetTitle('Yield [%]')
 
     def hitmap(self, t=1, random_trigger=1, n=10000, wbc=123):
         self.api.HVon()
@@ -654,7 +639,9 @@ if __name__ == '__main__':
     z = CLIX(d, args.verbosity, args.trim)
     if args.wbc:
         z.wbc_scan()
-        raw_input('Enter any key to close the program')
+        while not raw_input('Press enter to restart, anything else to stop: '):
+            z.wbc_scan()
+
     print
     if args.run:
         z.run(args.run)
