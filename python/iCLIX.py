@@ -162,6 +162,9 @@ class CLIX:
 
     def get_ia(self):
         print 'Analog Current: {} mA'.format(self.api.getTBia() * 1000)
+
+    def get_n_rocs(self):
+        return self.api.getNEnabledRocs()
     # endregion
 
     # -----------------------------------------
@@ -175,12 +178,26 @@ class CLIX:
     def daq_trigger(self, n_trig=1, period=500):
         self.api.daqTrigger(n_trig, period)
 
-    def daq_get_event(self):
+    def daq_get_event(self, get=False):
         try:
             data = self.api.daqGetEvent()
             print data
         except RuntimeError:
             pass
+
+    def get_event(self):
+        try:
+            data = self.api.daqGetEvent()
+            return data
+        except RuntimeError:
+            return
+
+    def get_data(self, n):
+        data = []
+        while len(data) < n:
+            event = self.get_event()
+            data.append(event) if event is not None else do_nothing()
+        return data
 
     def daq_get_raw_event(self, convert=1):
         try:
@@ -425,12 +442,12 @@ class CLIX:
         except RuntimeError:
             pass
 
-    def wbc_scan(self, min_wbc=90, max_triggers=50, max_wbc=130):
+    def wbc_scan(self, min_wbc=97, max_triggers=50, max_wbc=130, plot=False):
         """do_wbcScan [minimal WBC] [number of events] [maximal WBC]: \n
         sets wbc from minWBC until it finds the wbc which has more than 90% filled events or it reaches maxWBC \n
         (default [90] [100] [130])"""
 
-        # prepararations
+        # preparations
         print 'Turning on HV!'
         self.api.HVon()
         print 'Setting trigger source to "extern"'
