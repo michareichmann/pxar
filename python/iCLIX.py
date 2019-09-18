@@ -568,6 +568,24 @@ class CLIX:
                     for row in xrange(int(data1[3]), int(data2[3]) + 1):
                         print col, row, i2c
                         self.api.maskPixel(col, row, False, i2c)
+            elif data1[0] == 'pix':
+                i2c = int(data1[1])
+                col = int(data1[2])
+                row = int(data1[3])
+                self.api.maskPixel(col, row, True, i2c)
+                print 'Mask pix', col, row, 'i2c', i2c
+            elif data1[0] == 'col':
+                i2c = int(data1[1])
+                col = int(data1[2])
+                print 'Mask col', col, 'i2c', i2c
+                for row in xrange(80):
+                    self.api.maskPixel(col, row, True, i2c)
+            elif data1[0] == 'row':
+                i2c = int(data1[1])
+                row = int(data1[2])
+                print 'Mask row', row, 'i2c', i2c
+                for col in xrange(52):
+                    self.api.maskPixel(col, row, True, i2c)
 
     def save_data(self, n=240000):
         global BREAK
