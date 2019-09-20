@@ -1575,17 +1575,15 @@ class PxarCoreCmd(cmd.Cmd):
         # return help for the cmd
         return [self.do_enableOnePixel.__doc__, '']
 
-    @arity(0, 4, [int, int, int, int])
-    def do_enableBlock(self, right=3, up=None, row=3, col=3):
-        """enableBlock [right=3] [up=right] [row=3] [col=3] : unmask all Pixels; starting from row and col enable block of size up * right"""
-        up = right if up is None else up
-        self.api.maskAllPixels(0)
-        self.api.testAllPixels(1)
+    @arity(0, 5, [int, int, int, int, int])
+    def do_enableBlock(self, c1=3, c2=6, r1=3, r2=6, roc=None):
+        """enableBlock [c1=3] [c2=6] [r1=3] [r2=3] : unmask all Pixels; starting from row and col enable block of size up * right"""
+        self.api.maskAllPixels(1, roc)
         print '--> mask and enable all pixels!'
-        for i in range(right):
-            for j in range(up):
-                self.api.maskPixel(i + col, j + row, 1)
-        print '--> unmask Block from {c}/{r} to {c1}/{r1}'.format(c=col, r=row, c1=col + right, r1=row + up)
+        for i in xrange(c1, c2):
+            for j in xrange(r1, r2):
+                self.api.maskPixel(i, j, 0, roc)
+        print '--> unmask Block from {c}/{r} to {c1}/{r1}'.format(c=c1, r=r1, c1=c2, r1=r2)
         self.print_activated()
 
     def complete_enableBlock(self):
@@ -1968,7 +1966,6 @@ class PxarCoreCmd(cmd.Cmd):
                 for roc, ylds in yields.iteritems():
                     if any(yld > 10 for yld in ylds.values()[:wbc - min_wbc - 2]):
                         best_wbc = ylds.keys()[ylds.values().index(max(ylds.values()))]
-                        print 'set wbc of roc {i} to {v}'.format(i=roc, v=best_wbc)
                         self.api.setDAC('wbc', best_wbc, roc)
                         set_dacs[roc] = True
                 if all(set_dacs.itervalues()):
@@ -3034,13 +3031,14 @@ class PxarCoreCmd(cmd.Cmd):
     def complete_adc_disto(self):
         return [self.do_adc_disto.__doc__, '']
 
-    @arity(0, 3, [float, int, int])
-    def do_hitmap1(self, t=1, random_trigger=1, n=10000):
+    @arity(0, 4, [float, int, int, int])
+    def do_hitmap1(self, t=1, random_trigger=0, wbc=99, n=10000):
         self.api.HVon()
         t_start = time()
         if random_trigger:
             self.setPG(cal=False, res=False, delay=20)
         else:
+            self.api.setDAC('wbc', wbc)
             self.api.daqTriggerSource('extern')
         self.api.daqStart()
         self.start_pbar(t * 600)
@@ -3057,19 +3055,20 @@ class PxarCoreCmd(cmd.Cmd):
         self.ProgressBar.finish()
         self.api.daqStop()
         self.api.HVoff()
-        self.setPG()
+        if random_trigger:
+            self.setPG()
         data = [pix for ev in data for pix in ev.pixels]
         h = TH1I('h', 'h', 512, -256, 256)
         for pix in data:
             h.Fill(pix.value)
         self.plot_graph(h, draw_opt='')
         self.plot_map(data, 'Hit Map', count=True, no_stats=True)
-        stats = self.api.getStatistics()
-        event_rate = stats.valid_events / (2.5e-8 * stats.total_events / 8.)
-        hit_rate = stats.valid_pixels / (2.5e-8 * stats.total_events / 8.)
-        stats.dump
-        print 'Event Rate: {0:5.4f} MHz'.format(event_rate / 1000000)
-        print 'Hit Rate:   {0:5.4f} MHz'.format(hit_rate / 1000000)
+        #stats = self.api.getStatistics()
+        #event_rate = stats.valid_events / (2.5e-8 * stats.total_events / 8.)
+        #hit_rate = stats.valid_pixels / (2.5e-8 * stats.total_events / 8.)
+        #stats.dump
+        #print 'Event Rate: {0:5.4f} MHz'.format(event_rate / 1000000)
+        #print 'Hit Rate:   {0:5.4f} MHz'.format(hit_rate / 1000000)
 
     def complete_hitmap1(self):
         return [self.do_hitmap1.__doc__, '']
