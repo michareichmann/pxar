@@ -192,7 +192,7 @@ namespace pxar {
 
     /** Helper function to translate ADC values into address levels
      */
-    uint8_t translateLevel(int16_t x, int16_t level0, int16_t level1, int16_t levelS, uint8_t lastLevel, bool adjust=true);
+    uint8_t translateLevel(int16_t x, int16_t level1, int16_t levelS, uint8_t lastLevel, bool adjust=true);
 
     uint8_t translateLevel(int16_t x, std::vector<float> thresholds, uint8_t lastLevel, bool adjust=true);
 
