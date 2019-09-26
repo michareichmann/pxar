@@ -16,7 +16,7 @@
 class DLLEXPORT PixUserTestFactory {
 public:
 
-  static PixUserTestFactory*  instance(); 
+  static PixUserTestFactory * instance() { return nullptr; }
   PixTest*                    createTest(std::string, PixSetup *); 
 
 protected: 

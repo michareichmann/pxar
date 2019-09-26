@@ -252,7 +252,7 @@ int main(int argc, char *argv[]){
       ptp->setTestParameters(runtest, testParameters);
     }
     PixTest *t = factory->createTest(runtest, &a);
-    if (0 == t) t = userfactory->createTest(runtest, &a);
+    if (0 == t and userfactory != nullptr) t = userfactory->createTest(runtest, &a);
     if (t) {
       if (subtest.compare("nada")) {
 	t->runCommand(subtest);
@@ -332,7 +332,7 @@ int main(int argc, char *argv[]){
       } else {
         LOG(logINFO) << "  running: " << input;
         PixTest *t = factory->createTest(input, &a);
-        if (0 == t) t = userfactory->createTest(input, &a);
+        if (0 == t and userfactory != nullptr) t = userfactory->createTest(input, &a);
         if (t) {
 	  if (subtest.compare("nada")) {
 	    t->runCommand(subtest);

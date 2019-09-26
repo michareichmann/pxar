@@ -348,8 +348,8 @@ TGMainFrame(p, 1, 1, kVerticalFrame), fWidth(w), fHeight(h) {
 
   vector<string> tests = fTestParameters->getTests();
   cout << string(30, '=') << endl;
-  for (int i =0; i < tests.size(); i++) cout << tests.at(i) << endl;
-  for (unsigned int i = 0; i < tests.size(); ++i) {
+  for (size_t i = 0; i < tests.size(); i++) cout << tests.at(i) << endl;
+  for (size_t i = 0; i < tests.size(); ++i) {
     createTab(tests[i].c_str()); 
   }
 
@@ -613,9 +613,9 @@ void PixGui::createTab(const char* csel) {
 // ----------------------------------------------------------------------
 PixTest* PixGui::createTest(string testname) {
   PixTestFactory *factory = PixTestFactory::instance(); 
-  PixUserTestFactory *userfactory = PixUserTestFactory::instance(); 
+  PixUserTestFactory *userfactory = PixUserTestFactory::instance();
   PixTest *t =  factory->createTest(testname, fPixSetup);
-  if (0 == t) t = userfactory->createTest(testname, fPixSetup);
+  if (0 == t and userfactory != nullptr) t = userfactory->createTest(testname, fPixSetup);
   return t;
 }
 

@@ -257,14 +257,14 @@ void PixTestTiming::PhaseScan() {
   vector<TH2D*> rocdelayhists;
 
   int NTimings(0);
-  for (size_t itbm = 0; itbm<nTBMs; itbm++) {
+  for (size_t i_tbm = 0; i_tbm < nTBMs; i_tbm++) {
     NTimings = 0;
-    h1 = bookTH2D(Form("TBMPhaseScan_%d",int(itbm)),Form("Phase Scan for TBM Core %d",int(itbm)), 8, -0.5, 7.5, 8, -0.5, 7.5);
+    h1 = bookTH2D(Form("TBMPhaseScan_%d",int(i_tbm)), Form("Phase Scan for TBM Core %d", int(i_tbm)), 8, -0.5, 7.5, 8, -0.5, 7.5);
     h1->SetDirectory(fDirectory);
     setTitles(h1, "400MHz Phase", "160 MHz Phase");
     h1->SetMinimum(0);
     tbmhists.push_back(h1);
-    h2 = bookTH2D(Form("TBMGoodArea_%d",int(itbm)),Form("Functional Roc Delay Area for TBM Core %d",int(itbm)), 8, -0.5, 7.5, 8, -0.5, 7.5);
+    h2 = bookTH2D(Form("TBMGoodArea_%d",int(i_tbm)), Form("Functional Roc Delay Area for TBM Core %d", int(i_tbm)), 8, -0.5, 7.5, 8, -0.5, 7.5);
     h2->SetDirectory(fDirectory);
     setTitles(h2, "400MHz Phase", "160 MHz Phase");
     h2->SetMinimum(0);
@@ -278,7 +278,7 @@ void PixTestTiming::PhaseScan() {
       }
     } else {
       for (size_t jtbm = 0; jtbm<nTBMs; jtbm++) {
-        if (itbm==jtbm) {
+        if (i_tbm == jtbm) {
           uint8_t NewTBMSettingBase0 = GetTBMSetting("base0", jtbm) & 191;
           fApi->setTbmReg("base0", NewTBMSettingBase0, jtbm); //Enable Token Pass
         } else {
@@ -295,7 +295,7 @@ void PixTestTiming::PhaseScan() {
         int MaxFunctionalROCArea = 0;
         for (int ithtdelay = 0; ithtdelay < 4; ithtdelay++) {
           if (ithtdelay==2) continue;
-          h3 = bookTH2D(Form("ROCDelayScan_TBMCore_%d_%d_%d",int(itbm),delaysetting/4,ithtdelay),Form("TBM Core: %d ROC Delay Scan: 160MHz Phase = %d 400MHz Phase = %d THT Delay = %d",int(itbm),iclk160,iclk400,ithtdelay), 8, -0.5, 7.5, 8, -0.5, 7.5);
+          h3 = bookTH2D(Form("ROCDelayScan_TBMCore_%d_%d_%d", int(i_tbm), delaysetting / 4, ithtdelay), Form("TBM Core: %d ROC Delay Scan: 160MHz Phase = %d 400MHz Phase = %d THT Delay = %d", int(i_tbm), iclk160, iclk400, ithtdelay), 8, -0.5, 7.5, 8, -0.5, 7.5);
           h3->SetDirectory(fDirectory);
           setTitles(h3, "ROC Port 0 Delay", "ROC Port 1 Delay");
           h3->SetMinimum(0);
@@ -303,7 +303,7 @@ void PixTestTiming::PhaseScan() {
             for (int irocphaseport0 = 0; irocphaseport0 < 8; irocphaseport0++) {
               NTimings++;
               int ROCDelay = (ithtdelay << 6) | (irocphaseport1 << 3) | irocphaseport0;
-              LOG(logDEBUG) << "TBM Core: " << itbm << " 160MHz Phase: " << iclk160 << " 400MHz Phase: " << iclk400 << " TBM Phase " << bitset<8>(delaysetting).to_string() << " Token Header/Trailer Delay: " << bitset<2>(ithtdelay).to_string() << " ROC Port1: " << irocphaseport1 << " ROC Port0: " << irocphaseport0 << " ROCDelay Setting: " << bitset<8>(ROCDelay).to_string();
+              LOG(logDEBUG) << "TBM Core: " << i_tbm << " 160MHz Phase: " << iclk160 << " 400MHz Phase: " << iclk400 << " TBM Phase " << bitset<8>(delaysetting).to_string() << " Token Header/Trailer Delay: " << bitset<2>(ithtdelay).to_string() << " ROC Port1: " << irocphaseport1 << " ROC Port0: " << irocphaseport0 << " ROCDelay Setting: " << bitset<8>(ROCDelay).to_string();
               for (size_t itbm = 0; itbm<nTBMs; itbm++) fApi->setTbmReg("basea", ROCDelay, itbm);
               Log::ReportingLevel() = Log::FromString("QUIET");
               bool goodreadback = true;
@@ -315,7 +315,7 @@ void PixTestTiming::PhaseScan() {
                 int NErrors = results.errors_tbm_header() + results.errors_tbm_trailer() + results.errors_roc_missing();
                 if (NEvents==fNTrig && NErrors==0) {
                   h3->Fill(irocphaseport0,irocphaseport1);
-                  NFunctionalTimings[itbm]++;
+                  NFunctionalTimings[i_tbm]++;
                   NFunctionalROCPhases++;
                 }
               }
@@ -330,7 +330,7 @@ void PixTestTiming::PhaseScan() {
           }
         }
         if (NFunctionalROCPhases>0) {
-          NFunctionalTBMPhases[itbm]++;
+          NFunctionalTBMPhases[i_tbm]++;
           h1->Fill(iclk400,iclk160,NFunctionalROCPhases);
           h2->Fill(iclk400,iclk160,MaxFunctionalROCArea);
         }
