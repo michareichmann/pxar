@@ -1744,7 +1744,7 @@ class PxarCoreCmd(cmd.Cmd):
         data = None
         while data is None:
             data = self.daq_converted_raw()
-        tin = data.index(next(word for word in data if word < 2 * mean(data)))
+        tin = data.index(min(data))
         tout = 20 - (len(data) - tin - 3 * self.api.getNRocs())
         self.api.setTestboardDelays({'tindelay': tin, 'toutdelay': tout})
         print 'set tindelay to:  ', tin
