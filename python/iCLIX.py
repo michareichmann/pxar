@@ -254,6 +254,10 @@ class CLIX:
             self.send_triggers(1)
         return self.daq_get_raw_event(convert)
 
+    def get_mean_black(self, n_trigger=1000):
+        self.send_triggers(n_trigger)
+        return mean_sigma(self.get_raw_buffer()[:, 1])
+
     def get_tb_ia(self):
         """ returns analog DTB current """
         print 'Analog Current: {c} mA'.format(c=self.api.getTBia() * 1000)
