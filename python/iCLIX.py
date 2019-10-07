@@ -299,6 +299,19 @@ class CLIX:
         self.daq_stop()
         print 'Trigger loop with frequency of {f}Hz {m}'.format(f=freq, m='started' if on else 'stopped')
 
+    def get_address_levels(self, n_trigger=1000, data=None):
+        h = TH1I('hal', 'Analogue Adress Levels', 1024, -512, 511)
+        if data is None:
+            self.send_triggers(n_trigger)
+            data = self.get_raw_buffer()
+        try:
+            data = data[:, 3:]  # remove the ROC header
+            data = delete(data, range(5, data.shape[1], 6), axis=1)  # remove every sixth column (ph)
+            [h.Fill(lvl) for event in data for lvl in event]
+            return h
+        except IndexError:
+            return
+
     # endregion
 
     # -----------------------------------------
