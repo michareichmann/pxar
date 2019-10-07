@@ -7,7 +7,8 @@ from os.path import isfile, exists
 from os import makedirs, _exit
 from ConfigParser import ConfigParser
 from datetime import datetime
-from ROOT import TFile
+from ROOT import TFile, gROOT
+from numpy import average, sqrt
 
 
 type_dict = {'int32': 'I',
@@ -111,3 +112,22 @@ def calculate_col_row(c1, c0, r2, r1, r0):
 
 def bit_shift(value, shift):
     return (value >> shift) & 0b0111
+
+
+def mean_sigma(values, weights=None):
+    """ Return the weighted average and standard deviation. values, weights -- Numpy ndarrays with the same shape. """
+    weights = [1] * len(values) if weights is None else weights
+    if all(weight == 0 for weight in weights):
+        return [0, 0]
+    avrg = average(values, weights=weights)
+    variance = average((values - avrg) ** 2, weights=weights)  # Fast and numerically precise
+    return avrg, sqrt(variance)
+
+
+def set_root_warnings(status):
+    gROOT.ProcessLine('gErrorIgnoreLevel = {e};'.format(e='0' if status else 'kError'))
+
+
+def set_root_output(status=True):
+    gROOT.SetBatch(not status)
+    set_root_warnings(status)
