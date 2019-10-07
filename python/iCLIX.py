@@ -111,6 +111,34 @@ class CLIX:
         return (num & 0x0ffc) == 0x7f8
 
     @staticmethod
+    def translate_level(value, level1, level_s):
+        level = int((value + level1 + level_s) / level1)
+        return 5 if level >= 5 else level
+
+    def decode_analogue(self, value):
+        black = value[1]
+        level1 = (black - value[0]) / 4
+        level_s = level1 / 2
+        ph = value[-1]
+
+        c1 = self.translate_level(value[3], level1, level_s)
+        c0 = self.translate_level(value[4], level1, level_s)
+        c = c1 * 6 + c0
+
+        r2 = self.translate_level(value[5], level1, level_s)
+        r1 = self.translate_level(value[6], level1, level_s)
+        r0 = self.translate_level(value[7], level1, level_s)
+        r = (r2 * 6 + r1) * 6 + r0
+
+        column, row = calculate_col_row(c1, c0, r2, r1, r0)
+
+        print ' S,  c1  c0  r2  r1  r0'
+        print '{:2d}, {}'.format(level_s, ' '.join(['{:3d}'.format(i) for i in value[3:8]]))
+        print '{:2d}, {}\n'.format(level_s, ' '.join(['{:3d}'.format(i) for i in [c1, c0, r2, r1, r0]]))
+        print '\n===== [{c}, {r}, {p}] ====='.format(c=column, r=row, p=ph)
+
+
+    @staticmethod
     def decode_digital(value):
         # 0x0fff0fff -> 0xffffff
         print '\nDecoding digital hit:\n   C1  C0  R2  R1  R0'
