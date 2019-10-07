@@ -319,14 +319,24 @@ class CLIX:
     def get_activated(self, roc=None):
         return self.api.getNEnabledPixels(roc), self.api.getNMaskedPixels(roc)
 
-    def enable_single_pixel(self, row=14, column=14, roc=None):
+    def disable_all(self, roc=None):
+        self.api.testAllPixels(0, roc)
+        self.api.maskAllPixels(1, roc)
+
+    def enable_pix(self, column, row, roc=None):
+        self.api.testPixel(column, row, 1, roc)
+        self.api.maskPixel(column, row, 0, roc)
+
+    def enable_pixels(self, columns, rows, roc=None):
+        for column, row in zip(columns, rows):
+            self.enable_pix(column, row, roc)
+
+    def enable_single_pixel(self, column=14, row=14, roc=None):
         """enableOnePixel [row] [column] [roc] : enables one Pixel (default 14/14); masks and disables the rest"""
         print '--> disable and mask all pixels of all activated ROCs'
-        self.api.testAllPixels(0)
-        self.api.maskAllPixels(1)
-        self.api.testPixel(row, column, 1, roc)
-        self.api.maskPixel(row, column, 0, roc)
-        print_string = '--> enable and unmask Pixel {r}/{c}: '.format(r=row, c=column)
+        self.disable_all(roc)
+        self.enable_pix(column, row, roc)
+        print_string = '--> enable and unmask Pixel {c}/{r}: '.format(r=row, c=column)
         print_string += '(' + ','.join('ROC {n}: {a}/{m}'.format(n=roc, a=self.get_activated(roc)[0], m=self.get_activated(roc)[1]) for roc in xrange(self.api.getNEnabledRocs())) + ')'
         print print_string
 
@@ -656,6 +666,64 @@ class CLIX:
         b = [mean(l) for l in b_levels]
         ub = [mean(l) for l in ub_levels]
         print b, ub
+
+    def find_tb_delays(self):
+        """findAnalogueTBDelays: configures tindelay and toutdelay"""
+        self.api.setTestboardDelays({'tindelay': 0, 'toutdelay': 20})
+        self.api.maskAllPixels(1)
+        data = self.get_raw_event()
+        tin = data.index(min(data))
+        tout = 20 - (len(data) - tin - 3 * self.api.getNRocs())
+        self.api.setTestboardDelays({'tindelay': tin, 'toutdelay': tout})
+        print 'set tindelay to:  ', tin
+        print 'set toutdelay to: ', tout
+
+    def find_clk_delay(self, min_val=0, max_val=25, n_triggers=1000):
+        """find the best clock delay setting """
+        # variable declarations
+        cols = [0, 2, 4, 6, 8, 10, 15]
+        rows = [44, 41, 38, 35, 32, 29, 59]  # special pixel setting for splitting
+        spectrum = TSpectrum(10)
+        best_black, best_level = [], []
+
+        print 'scanning the clk delays ...'
+        self.start_pbar(self.get_n_rocs() * (max_val - min_val))
+        set_root_output(False)
+        for roc in xrange(self.get_n_rocs()):
+            black_spreads = []
+            level_spreads = []
+            self.disable_all(roc)
+            self.enable_pixels(cols, rows)
+            for clk in xrange(min_val, max_val):
+                self.set_clock(clk)
+                self.send_triggers(n_triggers)
+                events = self.get_raw_buffer()
+                try:
+                    black_spread = mean([abs(mean(events[:, 1 + roc * 3]) - mean(events[:, 3 + roc * 3 + (len(cols) - 1) * 6 + j])) for j in xrange(5)])
+                except (IndexError, TypeError):
+                    black_spread = 99
+                black_spreads.append(black_spread)
+                h = self.get_address_levels(data=events)
+                if spectrum.Search(h) == 6:
+                    levels = sorted([spectrum.GetPositionX()[i] for i in xrange(6)])
+                    spread = mean_sigma([levels[i + 1] - levels[i] for i in xrange(len(levels) - 1)])[1]
+                else:
+                    spread = 99
+                level_spreads.append(spread)
+                self.ProgressBar.update(roc * (max_val - min_val) + clk - min_val)
+            best_black.append(range(min_val, max_val)[black_spreads.index(min(black_spreads))])
+            best_level.append(range(min_val, max_val)[level_spreads.index(min(level_spreads))])
+        self.ProgressBar.finish()
+        set_root_output(True)
+        for roc, (b, lvl) in enumerate(zip(best_black, best_level)):
+            print 'ROC {}: clk for lowest black spread: {}'.format(roc, b)
+            print 'ROC {}: clk for lowest level spread: {}'.format(roc, lvl)
+
+    def draw_address_levels(self, n_trigger=1000):
+        h = self.get_address_levels(n_trigger)
+        self.Plotter.plot_histo(h)
+        return h
+
 
 
 def set_palette(custom=True, pal=1):
