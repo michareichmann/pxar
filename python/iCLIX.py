@@ -24,9 +24,9 @@ pxar_dir = dirname(dirname(realpath(__file__)))
 path.insert(1, join(pxar_dir, 'lib'))
 path.insert(1, join(pxar_dir, 'python', 'src'))
 
-from ROOT import TCanvas, TCutG, gStyle, TColor, TMultiGraph, TH1I
+from ROOT import TCanvas, TCutG, gStyle, TColor, TMultiGraph, TH1I, TSpectrum
 from argparse import ArgumentParser
-from numpy import zeros, array, mean
+from numpy import zeros, array, mean, delete
 from time import time, sleep
 from progressbar import Bar, ETA, FileTransferSpeed, Percentage, ProgressBar
 from pxar_helpers import *
@@ -206,6 +206,26 @@ class CLIX:
             return
         event = self.convert_raw_event(event) if convert == 1 else event
         return event
+
+    def send_triggers(self, n, period=500):
+        self.daq_start()
+        self.daq_trigger(n, period)
+        sleep(.2)
+        self.daq_stop()
+        sleep(.2)
+
+    def get_raw_buffer(self):
+        events = []
+        while not events or events[-1] is not None:
+            events.append(self.get_raw_event(trigger=False))
+        return array(events[:-1])
+
+    def get_raw_event(self, convert=1, trigger=True):
+        if trigger:
+            self.api.daqStart()
+            self.daq_trigger()
+            self.api.daqStop()
+        return self.daq_get_raw_event(convert)
 
     def get_tb_ia(self):
         """ returns analog DTB current """
