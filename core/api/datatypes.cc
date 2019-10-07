@@ -78,6 +78,12 @@ namespace pxar {
     return int(level) > 5 ? uint8_t(5) : level;
   }
 
+  uint8_t pixel::translateLevel(int16_t value, uint16_t level1, uint16_t levelS, int16_t black) {
+
+    uint8_t level = uint8_t((expandSign(value) + level1 + levelS - black) / level1);
+    return level > 5 ? 5 : level;
+  }
+
   uint8_t pixel::translateLevel(int16_t x, std::vector<float> thresholds, uint8_t lastLevel, bool adjust) {
 
     int16_t level = adjust ? adjustLevel(expandSign(x), lastLevel, thresholds) : expandSign(x);
@@ -129,41 +135,35 @@ namespace pxar {
       throw DataInvalidAddressError("Received wrong number of data words for a pixel");
     }
 
-    // Calculate the levels:
-    /** Changes by Micha*/
+    /** Calculate the levels: */
     int16_t level0 = black;
-    int16_t level1 = (black - ultrablack)/4;
-    int16_t levelS = level1/2;
+    uint16_t level1 = (black - ultrablack) / 4;
+    uint16_t levelS = level1 / 2;
 
     /** Get the pulse height */
     setValue(static_cast<double>(expandSign(analog.back() & 0x0fff) - level0));
 
     // Decode the pixel address
-    int c1 = translateLevel(analog.at(0), level1, levelS, 5);
-    int c0 = translateLevel(analog.at(1), level1, levelS, c1);
-    int c  = c1*6 + c0;
+    uint8_t c1 = translateLevel(analog.at(0), level1, levelS, black);
+    uint8_t c0 = translateLevel(analog.at(1), level1, levelS, black);
+    uint8_t c  = c1 * 6 + c0;
 
-    int r2 = translateLevel(analog.at(2), level1, levelS, c0);
-    int r1 = translateLevel(analog.at(3), level1, levelS, r2);
-    int r0 = translateLevel(analog.at(4), level1, levelS, r1);
-    int r  = (r2*6 + r1)*6 + r0;
+    uint8_t r2 = translateLevel(analog.at(2), level1, levelS, black);
+    uint8_t r1 = translateLevel(analog.at(3), level1, levelS, black);
+    uint8_t r0 = translateLevel(analog.at(4), level1, levelS, black);
+    uint8_t r  = (r2 * 6 + r1) * 6 + r0;
 
-//    std::cout << ultrablack << ", " << black << ", ";
-//    for (int i(0);i<5;i++)
-//      std::cout << expandSign(analog.at(i)) << ", ";
-//    std::cout << std::endl;
-
-    _row = 80 - r/2;
-    _column = 2*c + (r&1);
+    _row = 80 - r / 2;
+    _column = 2 * c + (r & 1);
 
     /**Output by Micha*/
     std::stringstream ss;
-    ss << "AnalogLevels: ";
-    ss<<(int)_column<<" "<<(int)_row << "\t";
-    for (unsigned i(0); i<analog.size(); i++)
-        ss << analog[i] << " ";
-    ss << "\t" << c1 <<" "<<c0<<" "<<r2<<" "<<r1<<" "<< r0;
-    LOG(logDEBUGAPI)<<ss.str() << " ";
+    for (unsigned i(0); i < analog.size(); i++)
+        ss << expandSign(analog[i]) << " ";
+    LOG(logDEBUGAPI) << "Analogue Levels: " << ss.str();
+    LOG(logDEBUGAPI) << "black, split, s: " << black << ", " << level1  << ", " << levelS;
+    LOG(logDEBUGAPI) << "Decoded Levels: " << int(c1) << " " << int(c0) << " " << int(r2) << " " << int(r1) << " " << int(r0);
+    LOG(logDEBUGAPI) << "PIXEL HIT: ===== [" << int(_column) << ", " << int(_row) << ", " << _mean << "] =====";
 
     /** Perform range checks:*/
     if(_row >= ROC_NUMROWS || _column >= ROC_NUMCOLS) {
