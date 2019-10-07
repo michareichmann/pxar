@@ -222,9 +222,7 @@ class CLIX:
 
     def get_raw_event(self, convert=1, trigger=True):
         if trigger:
-            self.api.daqStart()
-            self.daq_trigger()
-            self.api.daqStop()
+            self.send_triggers(1)
         return self.daq_get_raw_event(convert)
 
     def get_tb_ia(self):
