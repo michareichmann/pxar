@@ -80,6 +80,7 @@ namespace pxar {
 
   uint8_t pixel::translateLevel(int16_t value, uint16_t level1, uint16_t levelS, int16_t black) {
 
+    if (level1 == 0) { throw DataDecodingError("Black & Ultrablack levels are seriously fucked up..."); }
     uint8_t level = uint8_t((expandSign(value) + level1 + levelS - black) / level1);
     return level > 5 ? 5 : level;
   }
