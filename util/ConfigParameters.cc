@@ -80,6 +80,7 @@ void ConfigParameters::initialize() {
   fProbeD1 = "clk";
   fProbeD2 = "ctr";
   fOffsetDecoding = 0;
+  fOffsetDecodingVector.clear();
   fDecodingThresholds.resize(0);
 
   rocZeroAnalogCurrent = 0.0;
@@ -193,6 +194,7 @@ bool ConfigParameters::readConfigParameterFile(string file) {
       else if (0 == _name.compare("probeD2")) { fProbeD2 = _value; }
 
       else if (0 == _name.compare("decodingOffset")) { fOffsetDecoding = _ivalue; }
+      else if (_name == "decodingOffsetVector") { readDOffsetVector(_istring.str()); }
       else if (_name == "analogueThresholds") { readDecodingThresholds(_istring.str()); }
       else if (0 == _name.compare("guiX")) { fGuiX = _ivalue; }
       else if (0 == _name.compare("guiY")) { fGuiY = _ivalue; }
@@ -1228,6 +1230,27 @@ void ConfigParameters::readDecodingThresholds(std::string line) {
   }
   fDecodingThresholds = thresholds;
   LOG(logINFO) << "Successfully read decoding thresholds for " << thresholds.size() << " ROCs!";
+}
+
+void ConfigParameters::readDOffsetVector(std::string line) {
+
+  line = trim(line, "analogueOffsetVector ");
+  std::vector<std::vector<float> > offsets;
+  std::vector<std::string> roc_list = split(line, "]", false);
+  for (size_t i(0); i < roc_list.size(); i++){
+    std::vector<float> tmp;
+    std::vector<std::string> split_string = split(roc_list.at(i), ",", true);
+    for (size_t j(0); j < split_string.size(); j++){
+      if (split_string.at(j).empty())
+        continue;
+      tmp.push_back(float(atof(split_string.at(j).c_str())));
+//      std::cout << atof(split_string.at(j).c_str()) << std::endl;
+    }
+    if (!tmp.empty())
+      offsets.push_back(tmp);
+  }
+  fDecodingThresholds = offsets;
+  LOG(logINFO) << "Successfully read decoding offsets for " << offsets.size() << " ROCs!";
 }
 
 // ----------------------------------------------------------------------

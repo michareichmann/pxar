@@ -188,7 +188,8 @@ namespace pxar {
     std::vector<float> ultraBlack, black;
     std::vector<int16_t> levelS;
     std::vector<size_t> slidingWindow;
-    uint8_t offsetB;
+//    uint8_t offsetB;
+    std::vector<uint8_t> offsetB;
 
     /** Fixed level thresholds */
     bool hasThresholds;
@@ -202,7 +203,7 @@ namespace pxar {
     std::vector<std::string> event_ringbuffer;
 
   public:
-  dtbEventDecoder() : decodingStats(), readback_dirty(), count(), shiftReg(), readback(), eventID(-1), offsetB(0), hasThresholds(false), total_event(5), flawed_event(0),
+  dtbEventDecoder() : decodingStats(), readback_dirty(), count(), shiftReg(), readback(), eventID(-1), /*offsetB(0), */hasThresholds(false), total_event(5), flawed_event(0),
                       error_count(0), dump_count(0), event_ringbuffer(7) {
 
     /** initialise vectors */
@@ -210,9 +211,11 @@ namespace pxar {
     black.resize(16, 0);
     slidingWindow.resize(16, 0);
     levelS.resize(16, 0);
+    offsetB.clear();
   };
     void Clear() { decodingStats.clear(); readback.clear(); count.clear(); shiftReg.clear(); eventID = -1; };
-    void setOffset(uint8_t decodingOffset) { offsetB = decodingOffset; }
+    void setOffset(uint8_t decodingOffset) {offsetB.clear(); for(unsigned int roc_i = 0; roc_i < 16; roc_i++) offsetB.push_back(decodingOffset);}
+    void setOffset(std::vector<uint8_t> decodingOffsetVec) {offsetB.clear(); for(unsigned int roc_i = 0; roc_i < decodingOffsetVec.size(); roc_i++) offsetB.push_back(decodingOffsetVec[roc_i]);}
     void setThresholds(const std::vector<std::vector<float> > values) { thresholds = values; hasThresholds = bool(!values.empty()); }
     void clearErrors() { roc_Event.clearPixelErrors(); }
     bool foundHeader(int16_t, int16_t, int16_t);

@@ -572,7 +572,7 @@ namespace pxar {
   void dtbEventDecoder::AverageAnalogLevel(int16_t word1, int16_t word2, int16_t roc_n) {
 
     ultraBlack.at(roc_n) = expandSign(word1 & 0x0fff);
-    black.at(roc_n) = expandSign(word2 & 0x0fff) + offsetB;
+    black.at(roc_n) = expandSign(word2 & 0x0fff) + offsetB.at(roc_n);
 //    // Take the mean for a window of 1000 samples, initial measurement included
 //    if(slidingWindow.at(roc_n) < 1000) {
 //      slidingWindow.at(roc_n)++;
@@ -591,7 +591,7 @@ namespace pxar {
     if (not slidingWindow.at(roc_n + 1))
       return (roc_n + 1 == 0) ? true : (expandSign(word1) < ultraBlack.at(0) + 2 * levelS.at(0));
     bool foundUB = (ultraBlack.at(roc_n + 1) - levelS.at(roc_n + 1) * 2 < expandSign(word1) && ultraBlack.at(roc_n + 1) + levelS.at(roc_n + 1) * 2 > expandSign(word1));
-    bool foundB = (black.at(roc_n + 1) - levelS.at(roc_n + 1) < offsetB + expandSign(word2) && black.at(roc_n + 1) + levelS.at(roc_n + 1) > offsetB + expandSign(word2));
+    bool foundB = (black.at(roc_n + 1) - levelS.at(roc_n + 1) < offsetB.at(roc_n) + expandSign(word2) && black.at(roc_n + 1) + levelS.at(roc_n + 1) > offsetB.at(roc_n) + expandSign(word2));
     return foundB and foundUB;
   }
 
