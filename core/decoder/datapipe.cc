@@ -336,6 +336,15 @@ namespace pxar {
 
   void dtbEventDecoder::DecodeADC(rawEvent * sample) {
     LOG(logDEBUGPIPES) << "Decoding ROC data from ADC...";
+    for(size_t it=0; it<4; it++){
+      c0Vect[it].clear();
+      c1Vect[it].clear();
+      r1Vect[it].clear();
+      r0Vect[it].clear();
+      crVect[it].clear();
+      blackVect[it].clear();
+      ultraBlackVect[it].clear();
+    }
 
     int16_t roc_n = -1;
 
@@ -364,6 +373,12 @@ namespace pxar {
             evalLastDAC(roc_n, (*(word+2)) & 0x0fff);
 
             // Iterate to improve ultrablack and black measurement:
+            if(0<=roc_n && roc_n <4) {
+                ultraBlackVect[roc_n].push_back(expandSign((*word) & 0x0fff));
+                blackVect[roc_n].push_back(expandSign((*word) & 0x0fff));
+            }
+          else{
+                std::cout << "rocn is " << roc_n << " in DecodeADC" << std::endl;}
             AverageAnalogLevel((*word) & 0x0fff, (*(word+1)) & 0x0fff, roc_n);
 
             LOG(logDEBUGPIPES)  << "ROC Header: "
@@ -384,10 +399,19 @@ namespace pxar {
         std::vector<uint16_t> data;
         data.push_back((*word) & 0x0fff);
         for(size_t i = 0; i < 5; i++) { data.push_back((*(++word)) & 0x0fff); }
-
         try{
 //            std::cout << "ROC " << roc_n << std::endl;
             LOG(logDEBUGPIPES) << "Trying to decode pixel: " << listVector(data, false, true);
+            if(0<=roc_n && roc_n < 4) {
+                c0Vect[roc_n].push_back(expandSign(data[0]));
+                c1Vect[roc_n].push_back(expandSign(data[1]));
+                r0Vect[roc_n].push_back(expandSign(data[2]));
+                r1Vect[roc_n].push_back(expandSign(data[3]));
+                crVect[roc_n].push_back(expandSign(data[4]));
+            }
+            else{
+                std::cout << "rocn is " << roc_n << " in DecodeADC P2" << std::endl;
+            }
             if (hasThresholds){
               pixel pix(data, roc_n, thresholds.at(roc_n));
               roc_Event.pixels.push_back(pix);

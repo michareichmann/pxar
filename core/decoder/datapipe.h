@@ -190,6 +190,13 @@ namespace pxar {
     std::vector<size_t> slidingWindow;
 //    uint8_t offsetB;
     std::vector<uint8_t> offsetB;
+      std::vector<std::vector<int16_t> > c0Vect;
+      std::vector<std::vector<int16_t> > c1Vect;
+      std::vector<std::vector<int16_t> > r0Vect;
+      std::vector<std::vector<int16_t> > r1Vect;
+      std::vector<std::vector<int16_t> > blackVect;
+      std::vector<std::vector<int16_t> > ultraBlackVect;
+      std::vector<std::vector<int16_t> > crVect;
 
     /** Fixed level thresholds */
     bool hasThresholds;
@@ -212,6 +219,22 @@ namespace pxar {
     slidingWindow.resize(16, 0);
     levelS.resize(16, 0);
     offsetB.clear();
+    c0Vect.resize(4);
+    c1Vect.resize(4);
+    r1Vect.resize(4);
+    r0Vect.resize(4);
+    crVect.resize(4);
+    blackVect.resize(4);
+    ultraBlackVect.resize(4);
+    for(size_t it=0; it<4; it++){
+      c0Vect[it].clear();
+      c1Vect[it].clear();
+      r1Vect[it].clear();
+      r0Vect[it].clear();
+      crVect[it].clear();
+      blackVect[it].clear();
+      ultraBlackVect[it].clear();
+    }
   };
     void Clear() { decodingStats.clear(); readback.clear(); count.clear(); shiftReg.clear(); eventID = -1; };
     void setOffset(uint8_t decodingOffset) {offsetB.clear(); for(unsigned int roc_i = 0; roc_i < 16; roc_i++) offsetB.push_back(decodingOffset);}
@@ -219,6 +242,13 @@ namespace pxar {
     void setThresholds(const std::vector<std::vector<float> > values) { thresholds = values; hasThresholds = bool(!values.empty()); }
     void clearErrors() { roc_Event.clearPixelErrors(); }
     bool foundHeader(int16_t, int16_t, int16_t);
+      std::vector<int16_t> Getc0Vect(int roc) {return c0Vect[roc];}
+      std::vector<int16_t> Getc1Vect(int roc) {return c1Vect[roc];}
+      std::vector<int16_t> Getr0Vect(int roc) {return r0Vect[roc];}
+      std::vector<int16_t> Getr1Vect(int roc) {return r1Vect[roc];}
+      std::vector<int16_t> GetcrVect(int roc) {return crVect[roc];}
+      std::vector<int16_t> GetblackVect(int roc) {return blackVect[roc];}
+      std::vector<int16_t> GetUblackVect(int roc) {return ultraBlackVect[roc];}
 
     statistics getStatistics();
     std::vector<std::vector<uint16_t> > getReadback();
