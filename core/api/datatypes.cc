@@ -145,17 +145,28 @@ namespace pxar {
     setValue(static_cast<double>(expandSign(analog.back() & 0x0fff) - level0));
 
     // Decode the pixel address
+//      std::cout << "c1: ";
     uint8_t c1 = translateLevel(analog.at(0), level1, levelS, black);
+//      std::cout << "c0: ";
     uint8_t c0 = translateLevel(analog.at(1), level1, levelS, black);
-    uint8_t c  = c1 * 6 + c0;
+//      std::cout << "c: ";
+      uint8_t c  = c1 * 6 + c0;
 
+//      std::cout << "r1: ";
     uint8_t r2 = translateLevel(analog.at(2), level1, levelS, black);
+//      std::cout << "r0: ";
     uint8_t r1 = translateLevel(analog.at(3), level1, levelS, black);
+//      std::cout << "cr: ";
     uint8_t r0 = translateLevel(analog.at(4), level1, levelS, black);
-    uint8_t r  = (r2 * 6 + r1) * 6 + r0;
+//      std::cout << "r: ";
+      uint8_t r  = (r2 * 6 + r1) * 6 + r0;
 
+//      std::cout << "row: ";
     _row = 80 - r / 2;
+//    std::cout << int(_row) << std::endl;
+//    std::cout << "column: ";
     _column = 2 * c + (r & 1);
+//    std::cout << int(_column) << std::endl;
 
     /**Output by Micha*/
     std::stringstream ss;

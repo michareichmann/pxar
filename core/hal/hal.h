@@ -429,7 +429,9 @@ namespace pxar {
     uint16_t GetADC(uint8_t rpc_par1);
 
     void setOffset(uint8_t offsetDec) { m_decoder[0].setOffset(offsetDec); }
-    void setOffset(std::vector<uint8_t> offsetDecv) { m_decoder[0].setOffset(offsetDecv); }
+//    void setOffset(std::vector<uint8_t> offsetDecv) { m_decoder[0].setOffset(offsetDecv); }
+//    void setOffset(std::vector<uint16_t> offsetDecv) { m_decoder[0].setOffset(offsetDecv); }
+    void setOffset(std::vector<float> offsetDecv) { m_decoder[0].setOffset(offsetDecv); }
 
     void setDecodingThresholds(std::vector<std::vector<float> > values) { m_decoder[0].setThresholds(values); }
 

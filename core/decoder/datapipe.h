@@ -189,11 +189,11 @@ namespace pxar {
     std::vector<int16_t> levelS;
     std::vector<size_t> slidingWindow;
 //    uint8_t offsetB;
-    std::vector<uint8_t> offsetB;
-      std::vector<std::vector<int16_t> > c0Vect;
+    std::vector<float> offsetB;
       std::vector<std::vector<int16_t> > c1Vect;
-      std::vector<std::vector<int16_t> > r0Vect;
+      std::vector<std::vector<int16_t> > c0Vect;
       std::vector<std::vector<int16_t> > r1Vect;
+      std::vector<std::vector<int16_t> > r0Vect;
       std::vector<std::vector<int16_t> > blackVect;
       std::vector<std::vector<int16_t> > ultraBlackVect;
       std::vector<std::vector<int16_t> > crVect;
@@ -237,11 +237,13 @@ namespace pxar {
     }
   };
     void Clear() { decodingStats.clear(); readback.clear(); count.clear(); shiftReg.clear(); eventID = -1; };
-    void setOffset(uint8_t decodingOffset) {offsetB.clear(); for(unsigned int roc_i = 0; roc_i < 16; roc_i++) offsetB.push_back(decodingOffset);}
-    void setOffset(std::vector<uint8_t> decodingOffsetVec) {offsetB.clear(); for(unsigned int roc_i = 0; roc_i < decodingOffsetVec.size(); roc_i++) offsetB.push_back(decodingOffsetVec[roc_i]);}
-    void setThresholds(const std::vector<std::vector<float> > values) { thresholds = values; hasThresholds = bool(!values.empty()); }
+    void setOffset(uint8_t decodingOffset) {offsetB.clear(); for(unsigned int roc_i = 0; roc_i < 16; roc_i++) offsetB.push_back(float(decodingOffset));}
+//    void setOffset(std::vector<uint8_t> decodingOffsetVec) {offsetB.clear(); for(unsigned int roc_i = 0; roc_i < decodingOffsetVec.size(); roc_i++) offsetB.push_back(float(decodingOffsetVec[roc_i]));}
+//    void setOffset(std::vector<uint16_t> decodingOffsetVec) {offsetB.clear(); for(unsigned int roc_i = 0; roc_i < decodingOffsetVec.size(); roc_i++){if(decodingOffsetVec[roc_i] <= 256){offsetB.push_back(decodingOffsetVec[roc_i]);} else{offsetB.push_back(float(decodingOffsetVec[roc_i]) / 100.);}}}
+    void setOffset(std::vector<float> decodingOffsetVec) {offsetB.clear(); for(unsigned int roc_i = 0; roc_i < decodingOffsetVec.size(); roc_i++) offsetB.push_back(float(decodingOffsetVec[roc_i]));}
+      void setThresholds(const std::vector<std::vector<float> > values) { thresholds = values; hasThresholds = bool(!values.empty()); }
     void clearErrors() { roc_Event.clearPixelErrors(); }
-    bool foundHeader(int16_t, int16_t, int16_t);
+    bool foundHeader(int16_t, uint16_t, uint16_t);
       std::vector<int16_t> Getc0Vect(int roc) {return c0Vect[roc];}
       std::vector<int16_t> Getc1Vect(int roc) {return c1Vect[roc];}
       std::vector<int16_t> Getr0Vect(int roc) {return r0Vect[roc];}
