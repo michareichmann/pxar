@@ -352,11 +352,6 @@ namespace pxar {
     if (static_cast<int>(sample->GetSize()) - 3*GetTokenChainLength() > 0) {
       roc_Event.pixels.reserve((sample->GetSize() - 3*GetTokenChainLength())/6);
     }
-//      std::cout<<"word: ";
-//      for(std::vector<uint16_t>::iterator wordi = sample->data.begin(); wordi != sample->data.end(); wordi++)
-//            std::cout << expandSign((*wordi) & 0x0fff) << " ";
-//      std::cout << std::endl << std::endl;
-
           // Loop over the full data:
     for(std::vector<uint16_t>::iterator word = sample->data.begin(); word != sample->data.end(); word++) {
 
@@ -366,12 +361,11 @@ namespace pxar {
 	      break;
       }
 
-
       // Check if we have another ROC header (UB and B levels):
       // Here we have to assume the first two words are a ROC header because we rely on
       // its Ultrablack and Black level as initial values for auto-calibration:
 
-      if (roc_n < 0 || foundHeader(roc_n, *word & 0x0fff, *(word + 1) & 0x0fff)) {
+      if ((roc_n < 0 && !slidingWindow[roc_n + 1]) || foundHeader(roc_n, *word & 0x0fff, *(word + 1) & 0x0fff)) {
             roc_n++;
             // Save the lastDAC value:
             evalLastDAC(roc_n, (*(word+2)) & 0x0fff);
@@ -384,12 +378,8 @@ namespace pxar {
                 blackVect[roc_n].push_back(tempblaaa);
             }
             else {
-                std::cout << "fifth roc? in DecodeADC: " << std::endl;
+                std::cout << "A Fifth roc? in DecodeADC: " << std::endl;
                 std::cout << "black: " << expandSign((*word) & 0x0fff) << ", ultraB: " << expandSign((*(word+1)) & 0x0fff) << std::endl;
-//                std::cout << "full word...: ";
-//                for(std::vector<uint16_t>::iterator wordbla = sample->data.begin(); wordbla != sample->data.end(); wordbla++)
-//                    std::cout << expandSign((*wordbla) & 0x0fff) << " ";
-//                std::cout << std::endl;
             }
             AverageAnalogLevel((*word) & 0x0fff, (*(word+1)) & 0x0fff, roc_n);
 
@@ -425,6 +415,21 @@ namespace pxar {
             }
             else{
                 std::cout << "rocn is " << roc_n << " in DecodeADC P2" << std::endl;
+              std::cout << "word is: ";
+                for(std::vector<uint16_t>::iterator wordi = sample->data.begin(); wordi != sample->data.end(); wordi++) std::cout << expandSign(*wordi & 0x0fff) << " ";
+                std::cout << std::endl;
+                std::cout << "ublack is: ";
+                for(std::vector<float>::iterator it_ub = ultraBlack.begin(); it_ub != ultraBlack.end(); it_ub++) std::cout << *it_ub << " ";
+                std::cout << std::endl;
+                std::cout << "black is: ";
+                for(std::vector<float>::iterator it_b = black.begin(); it_b != black.end(); it_b++) std::cout << *it_b << " ";
+                std::cout << std::endl;
+                std::cout << "levelS is: ";
+                for(std::vector<int16_t>::iterator it_ls = levelS.begin(); it_ls != levelS.end(); it_ls++) std::cout << *it_ls << " ";
+                std::cout << std::endl;
+                std::cout << "slidingW is: ";
+                for(std::vector<size_t>::iterator it_sw = slidingWindow.begin(); it_sw != slidingWindow.end(); it_sw++) std::cout << int(*it_sw) << " ";
+                std::cout << std::endl;
             }
             if (hasThresholds){
               pixel pix(data, roc_n, thresholds.at(roc_n));
@@ -627,11 +632,10 @@ namespace pxar {
 
   bool dtbEventDecoder::foundHeader(int16_t roc_n, uint16_t word1, uint16_t word2){
       if (not slidingWindow.at(roc_n + 1)) {
-//        return (expandSign(word1) < ultraBlack.at(0) + 2 * levelS.at(0));
-        return (roc_n + 1 == 0) ? true : (expandSign(word1) < ultraBlack.at(0) + 2 * levelS.at(0));
+        return (roc_n + 1 == 0) ? true : (expandSign(word1) < ultraBlack.at(0) + 4 * levelS.at(0));
     }
-    bool foundUB = (int16_t(ultraBlack.at(roc_n + 1)) - levelS.at(roc_n + 1) * 2 <= expandSign(word1) && expandSign(word1) <= int16_t(ultraBlack.at(roc_n + 1)) + levelS.at(roc_n + 1) * 2);
-    bool foundB = (int16_t(black.at(roc_n + 1)) - levelS.at(roc_n + 1) <= expandSign(word2) && expandSign(word2) <= int16_t(black.at(roc_n + 1)) + levelS.at(roc_n + 1));
+    bool foundUB = (expandSign(word1) <= int16_t(ultraBlack.at(roc_n + 1)) + levelS.at(roc_n + 1) * 4);
+    bool foundB = ((int16_t(black.at(roc_n + 1)) - 4 * levelS.at(roc_n + 1)) <= expandSign(word2) && expandSign(word2) <= (int16_t(black.at(roc_n + 1)) + 2 * levelS.at(roc_n + 1)));
     return foundB and foundUB;
   }
 

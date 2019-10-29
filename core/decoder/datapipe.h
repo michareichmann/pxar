@@ -251,6 +251,14 @@ namespace pxar {
       std::vector<int16_t> GetcrVect(int roc) {return crVect[roc];}
       std::vector<int16_t> GetblackVect(int roc) {return blackVect[roc];}
       std::vector<int16_t> GetUblackVect(int roc) {return ultraBlackVect[roc];}
+      void SetBlackVectors(std::vector<float> uBlackV, std::vector<float> blackV, std::vector<int16_t> levelSV){
+          for(size_t it = 0; it < uBlackV.size() and it < ultraBlack.size(); it++) ultraBlack[it] = uBlackV[it];
+          for(size_t it = 0; it < blackV.size() and it < black.size(); it++) black[it] = blackV[it];
+          for(size_t it = 0; it < levelSV.size() and it < levelS.size(); it++) levelS[it] = levelSV[it];
+          for(size_t it = 0; it < levelS.size(); it++) slidingWindow[it] = int(levelS[it] != 0);}
+      std::vector<float> GetBlack() {return black;}
+      std::vector<float> GetUBlack() {return ultraBlack;}
+      std::vector<int16_t> GetLevelS() {return levelS;}
 
     statistics getStatistics();
     std::vector<std::vector<uint16_t> > getReadback();
