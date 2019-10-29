@@ -415,21 +415,6 @@ namespace pxar {
             }
             else{
                 std::cout << "rocn is " << roc_n << " in DecodeADC P2" << std::endl;
-              std::cout << "word is: ";
-                for(std::vector<uint16_t>::iterator wordi = sample->data.begin(); wordi != sample->data.end(); wordi++) std::cout << expandSign(*wordi & 0x0fff) << " ";
-                std::cout << std::endl;
-                std::cout << "ublack is: ";
-                for(std::vector<float>::iterator it_ub = ultraBlack.begin(); it_ub != ultraBlack.end(); it_ub++) std::cout << *it_ub << " ";
-                std::cout << std::endl;
-                std::cout << "black is: ";
-                for(std::vector<float>::iterator it_b = black.begin(); it_b != black.end(); it_b++) std::cout << *it_b << " ";
-                std::cout << std::endl;
-                std::cout << "levelS is: ";
-                for(std::vector<int16_t>::iterator it_ls = levelS.begin(); it_ls != levelS.end(); it_ls++) std::cout << *it_ls << " ";
-                std::cout << std::endl;
-                std::cout << "slidingW is: ";
-                for(std::vector<size_t>::iterator it_sw = slidingWindow.begin(); it_sw != slidingWindow.end(); it_sw++) std::cout << int(*it_sw) << " ";
-                std::cout << std::endl;
             }
             if (hasThresholds){
               pixel pix(data, roc_n, thresholds.at(roc_n));
