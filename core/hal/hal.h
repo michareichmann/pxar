@@ -433,6 +433,8 @@ namespace pxar {
 //    void setOffset(std::vector<uint16_t> offsetDecv) { m_decoder[0].setOffset(offsetDecv); }
     void setOffset(std::vector<float> offsetDecv) { m_decoder[0].setOffset(offsetDecv); }
 
+      void setLevel1Offsets(std::vector<float> offsetsL1) {m_decoder[0].setLevel1Offsets(offsetsL1);}
+
     void setDecodingThresholds(std::vector<std::vector<float> > values) { m_decoder[0].setThresholds(values); }
 
   private:

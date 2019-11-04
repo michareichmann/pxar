@@ -352,6 +352,8 @@ namespace pxar {
     if (static_cast<int>(sample->GetSize()) - 3*GetTokenChainLength() > 0) {
       roc_Event.pixels.reserve((sample->GetSize() - 3*GetTokenChainLength())/6);
     }
+//      PrintWordWithSign(sample->data);
+//      PrintCodingVectors();
           // Loop over the full data:
     for(std::vector<uint16_t>::iterator word = sample->data.begin(); word != sample->data.end(); word++) {
 
@@ -372,8 +374,8 @@ namespace pxar {
 
             // Iterate to improve ultrablack and black measurement:
             if(0<=roc_n && roc_n <4) {
-                int16_t tempublaaa = expandSign((*word) & 0x0fff);
-                int16_t tempblaaa = expandSign((*(word+1)) & 0x0fff);
+                int16_t tempublaaa = expandSign((*word) & 0x0fff) - level1Offset.at(roc_n);
+                int16_t tempblaaa = expandSign((*(word+1)) & 0x0fff) - level1Offset.at(roc_n);
                 ultraBlackVect[roc_n].push_back(tempublaaa);
                 blackVect[roc_n].push_back(tempblaaa);
             }
@@ -381,7 +383,7 @@ namespace pxar {
                 std::cout << "A Fifth roc? in DecodeADC: " << std::endl;
                 std::cout << "black: " << expandSign((*word) & 0x0fff) << ", ultraB: " << expandSign((*(word+1)) & 0x0fff) << std::endl;
             }
-            AverageAnalogLevel((*word) & 0x0fff, (*(word+1)) & 0x0fff, roc_n);
+          AverageAnalogLevelDiego((*word) & 0x0fff, (*(word+1)) & 0x0fff, roc_n);
 
 //            std::cout << "ROC Header: "
             LOG(logDEBUGPIPES)  << "ROC Header: "
@@ -407,11 +409,11 @@ namespace pxar {
 //            std::cout << "ROC " << roc_n << std::endl;
             LOG(logDEBUGPIPES) << "Trying to decode pixel: " << listVector(data, false, true);
             if(0<=roc_n && roc_n < 4) {
-                c1Vect[roc_n].push_back(expandSign(data[0]));
-                c0Vect[roc_n].push_back(expandSign(data[1]));
-                r1Vect[roc_n].push_back(expandSign(data[2]));
-                r0Vect[roc_n].push_back(expandSign(data[3]));
-                crVect[roc_n].push_back(expandSign(data[4]));
+                c1Vect[roc_n].push_back(expandSign(data[0]) - level1Offset[roc_n]);
+                c0Vect[roc_n].push_back(expandSign(data[1]) - level1Offset[roc_n]);
+                r1Vect[roc_n].push_back(expandSign(data[2]) - level1Offset[roc_n]);
+                r0Vect[roc_n].push_back(expandSign(data[3]) - level1Offset[roc_n]);
+                crVect[roc_n].push_back(expandSign(data[4]) - level1Offset[roc_n]);
             }
             else{
                 std::cout << "rocn is " << roc_n << " in DecodeADC P2" << std::endl;
@@ -421,7 +423,7 @@ namespace pxar {
               roc_Event.pixels.push_back(pix);
             }
             else {
-              pixel pix(data, roc_n, int16_t(ultraBlack.at(roc_n)), int16_t(black.at(roc_n)));
+              pixel pix(data, roc_n, int16_t(ultraBlack.at(roc_n)), int16_t(black.at(roc_n)), float(level1Offset.at(roc_n)));
               roc_Event.pixels.push_back(pix);
             }
             decodingStats.m_info_pixels_valid++;
@@ -597,10 +599,18 @@ namespace pxar {
     }
   }
 
+    void dtbEventDecoder::AverageAnalogLevelDiego(int16_t word1, int16_t word2, int16_t roc_n) {
+        int16_t ub = expandSign(word1 & 0x0fff) - level1Offset.at(roc_n);
+        uint16_t templ1 = (0 - ub) / 4;
+        int16_t estimate_black = ub + 4 * templ1 + 2;
+        offsetB.at(roc_n) = 0 - (expandSign(word2 & 0x0fff) - level1Offset.at(roc_n));
+        AverageAnalogLevel(word1, word2, roc_n);
+    }
+
   void dtbEventDecoder::AverageAnalogLevel(int16_t word1, int16_t word2, int16_t roc_n) {
 
-    ultraBlack.at(roc_n) = expandSign(word1 & 0x0fff);
-    black.at(roc_n) = expandSign(word2 & 0x0fff) + offsetB.at(roc_n);
+    ultraBlack.at(roc_n) = expandSign(word1 & 0x0fff) - level1Offset.at(roc_n);
+    black.at(roc_n) = expandSign(word2 & 0x0fff) + offsetB.at(roc_n) - level1Offset.at(roc_n);
 //    // Take the mean for a window of 1000 samples, initial measurement included
 //    if(slidingWindow.at(roc_n) < 1000) {
 //      slidingWindow.at(roc_n)++;
@@ -617,10 +627,10 @@ namespace pxar {
 
   bool dtbEventDecoder::foundHeader(int16_t roc_n, uint16_t word1, uint16_t word2){
       if (not slidingWindow.at(roc_n + 1)) {
-        return (roc_n + 1 == 0) ? true : (expandSign(word1) < ultraBlack.at(0) + 4 * levelS.at(0));
+        return (roc_n + 1 == 0) ? true : (expandSign(word1) - level1Offset.at(0) < ultraBlack.at(0) + 4 * levelS.at(0));
     }
-    bool foundUB = (expandSign(word1) <= int16_t(ultraBlack.at(roc_n + 1)) + levelS.at(roc_n + 1) * 4);
-    bool foundB = ((int16_t(black.at(roc_n + 1)) - 4 * levelS.at(roc_n + 1)) <= expandSign(word2) && expandSign(word2) <= (int16_t(black.at(roc_n + 1)) + 2 * levelS.at(roc_n + 1)));
+    bool foundUB = (expandSign(word1) - level1Offset.at(roc_n + 1) <= int16_t(ultraBlack.at(roc_n + 1)) + levelS.at(roc_n + 1) * 4);
+    bool foundB = ((int16_t(black.at(roc_n + 1)) - 4 * levelS.at(roc_n + 1)) <= expandSign(word2) - level1Offset.at(roc_n + 1) && expandSign(word2) - level1Offset.at(roc_n + 1) <= (int16_t(black.at(roc_n + 1)) + 2 * levelS.at(roc_n + 1)));
     return foundB and foundUB;
   }
 
@@ -730,4 +740,34 @@ namespace pxar {
     xorsum.clear();
     return tmp;
   }
+
+    void dtbEventDecoder::PrintWordWithSign(std::vector<uint16_t> word){
+      std::cout << "The decoding word is: ";
+      for(std::vector<uint16_t>::iterator wordi = word.begin(); wordi != word.end(); wordi++)
+        std::cout << expandSign(*wordi & 0x0fff) << ", ";
+      std::cout << std::endl;
+    }
+
+    void dtbEventDecoder::PrintCodingVectors(){
+      std::cout << "Ultra black: ";
+      for(std::vector<float>::iterator ublacki = ultraBlack.begin(); ublacki != ultraBlack.end(); ublacki++)
+        std::cout << *ublacki << ", ";
+      std::cout << std::endl;
+      std::cout << "Black: ";
+      for(std::vector<float>::iterator blacki = black.begin(); blacki != black.end(); blacki++)
+        std::cout << *blacki << ", ";
+      std::cout << std::endl;
+      std::cout << "LevelS: ";
+      for(std::vector<int16_t>::iterator levelsi = levelS.begin(); levelsi != levelS.end(); levelsi++)
+        std::cout << *levelsi << ", ";
+      std::cout << std::endl;
+      std::cout << "Sliding window: ";
+      for(std::vector<size_t>::iterator swi = slidingWindow.begin(); swi != slidingWindow.end(); swi++)
+        std::cout << *swi << ", ";
+      std::cout << std::endl;
+      std::cout << "Decoding offsets: ";
+      for(std::vector<float>::iterator doi = offsetB.begin(); doi != offsetB.end(); doi++)
+          std::cout << *doi << ", ";
+      std::cout << std::endl << std::endl;
+    }
 }

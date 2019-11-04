@@ -78,10 +78,10 @@ namespace pxar {
     return int(level) > 5 ? uint8_t(5) : level;
   }
 
-  uint8_t pixel::translateLevel(int16_t value, uint16_t level1, uint16_t levelS, int16_t black) {
+  uint8_t pixel::translateLevel(int16_t value, uint16_t level1, uint16_t levelS, int16_t black, float level1Off) {
 
     if (level1 == 0) { throw DataDecodingError("Black & Ultrablack levels are seriously fucked up..."); }
-    uint8_t level = uint8_t((expandSign(value) + level1 + levelS - black) / level1);
+    uint8_t level = uint8_t((expandSign(value) - level1Off + level1 + levelS - black) / level1);
     return level > 5 ? 5 : level;
   }
 
@@ -129,7 +129,7 @@ namespace pxar {
     }
   }
 
-  void pixel::decodeAnalog(std::vector<uint16_t> analog, int16_t ultrablack, int16_t black) {
+  void pixel::decodeAnalog(std::vector<uint16_t> analog, int16_t ultrablack, int16_t black, float level1Off) {
     // Check pixel data length:
     if(analog.size() != 6) {
       LOG(logDEBUGAPI) << "Received wrong number of data words for a pixel: " << analog.size();
@@ -146,18 +146,18 @@ namespace pxar {
 
     // Decode the pixel address
 //      std::cout << "c1: ";
-    uint8_t c1 = translateLevel(analog.at(0), level1, levelS, black);
+    uint8_t c1 = translateLevel(analog.at(0), level1, levelS, black, level1Off);
 //      std::cout << "c0: ";
-    uint8_t c0 = translateLevel(analog.at(1), level1, levelS, black);
+    uint8_t c0 = translateLevel(analog.at(1), level1, levelS, black, level1Off);
 //      std::cout << "c: ";
       uint8_t c  = c1 * 6 + c0;
 
 //      std::cout << "r1: ";
-    uint8_t r2 = translateLevel(analog.at(2), level1, levelS, black);
+    uint8_t r2 = translateLevel(analog.at(2), level1, levelS, black, level1Off);
 //      std::cout << "r0: ";
-    uint8_t r1 = translateLevel(analog.at(3), level1, levelS, black);
+    uint8_t r1 = translateLevel(analog.at(3), level1, levelS, black, level1Off);
 //      std::cout << "cr: ";
-    uint8_t r0 = translateLevel(analog.at(4), level1, levelS, black);
+    uint8_t r0 = translateLevel(analog.at(4), level1, levelS, black, level1Off);
 //      std::cout << "r: ";
       uint8_t r  = (r2 * 6 + r1) * 6 + r0;
 
