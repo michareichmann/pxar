@@ -344,9 +344,14 @@ namespace pxar {
       crVect[it].clear();
       blackVect[it].clear();
       ultraBlackVect[it].clear();
+      lastDacVect[it].clear();
     }
 
     int16_t roc_n = -1;
+      float lastVal = 0;
+      int16_t tword0 = 0;
+      int16_t tword1 = 0;
+      int16_t tword2 = 0;
 
     // Reserve expected number of pixels from data length (subtract ROC headers):
     if (static_cast<int>(sample->GetSize()) - 3*GetTokenChainLength() > 0) {
@@ -367,23 +372,32 @@ namespace pxar {
       // Here we have to assume the first two words are a ROC header because we rely on
       // its Ultrablack and Black level as initial values for auto-calibration:
 
+      lastVal = 0;
       if ((roc_n < 0 && !slidingWindow[roc_n + 1]) || foundHeader(roc_n, *word & 0x0fff, *(word + 1) & 0x0fff)) {
-            roc_n++;
-            // Save the lastDAC value:
-            evalLastDAC(roc_n, (*(word+2)) & 0x0fff);
 
-            // Iterate to improve ultrablack and black measurement:
+            roc_n++;
+            // apply timing correction:
+            tword0 = int((float(expandSign((*word) & 0x0fff)) - timeCompensator.at(roc_n) * 0) / float(1 - timeCompensator.at(roc_n)) + 0.4999);
+//            tword0 = int((float(expandSign((*word) & 0x0fff) - level1Offset.at(roc_n)) - timeCompensator.at(roc_n) * 0) / float(1 - timeCompensator.at(roc_n)) + 0.4999);
+            tword1 = int((float(expandSign((*(word + 1)) & 0x0fff)) - timeCompensator.at(roc_n) * float(tword0)) / float(1 - timeCompensator.at(roc_n)) + 0.4999);
+//            tword1 = int((float(expandSign((*(word + 1)) & 0x0fff) - level1Offset.at(roc_n)) - timeCompensator.at(roc_n) * float(tword0)) / float(1 - timeCompensator.at(roc_n)) + 0.4999);
+            tword2 = int((float(expandSign((*(word + 2)) & 0x0fff)) - timeCompensator.at(roc_n) * float(tword1)) / float(1 - timeCompensator.at(roc_n)) + 0.4999);
+//            tword2 = int((float(expandSign((*(word + 2)) & 0x0fff) - level1Offset.at(roc_n)) - timeCompensator.at(roc_n) * float(tword1)) / float(1 - timeCompensator.at(roc_n)) + 0.4999);
+
             if(0<=roc_n && roc_n <4) {
-                int16_t tempublaaa = expandSign((*word) & 0x0fff) - level1Offset.at(roc_n);
-                int16_t tempblaaa = expandSign((*(word+1)) & 0x0fff) - level1Offset.at(roc_n);
-                ultraBlackVect[roc_n].push_back(tempublaaa);
-                blackVect[roc_n].push_back(tempblaaa);
+                ultraBlackVect[roc_n].push_back(tword0 - level1Offset.at(roc_n));
+                blackVect[roc_n].push_back(tword1 - level1Offset.at(roc_n));
+                lastDacVect[roc_n].push_back(tword2 - level1Offset.at(roc_n));
             }
             else {
                 std::cout << "A Fifth roc? in DecodeADC: " << std::endl;
                 std::cout << "black: " << expandSign((*word) & 0x0fff) << ", ultraB: " << expandSign((*(word+1)) & 0x0fff) << std::endl;
             }
-          AverageAnalogLevelDiego((*word) & 0x0fff, (*(word+1)) & 0x0fff, roc_n);
+          AverageAnalogLevelDiego(contractSign(tword0), contractSign(tword1), roc_n);
+//          AverageAnalogLevelDiego((*word) & 0x0fff, (*(word+1)) & 0x0fff, roc_n);
+          // Save the lastDAC value:
+          evalLastDAC(roc_n, contractSign(tword2));
+//          evalLastDAC(roc_n, (*(word+2)) & 0x0fff);
 
 //            std::cout << "ROC Header: "
             LOG(logDEBUGPIPES)  << "ROC Header: "
@@ -393,18 +407,30 @@ namespace pxar {
 //            std::cout << std::endl;
             // Advance iterator:
             word +=  2;
+            lastVal = float(tword2);
       }
       // We have a pixel hit:
       else {
         // Not enough data for a new pixel hit (six words):
         if(sample->data.end() - word < 6) {
           decodingStats.m_errors_pixel_incomplete++;
+            lastVal = 0;
           break;
         }
-
+        std::vector<int16_t> data_comp;
+        for(size_t i = 0; i < 6; i++){
+          int temp_data = int((float(expandSign((*word) & 0x0fff)) - timeCompensator.at(roc_n) * lastVal) / float(1 - timeCompensator.at(roc_n)) + 0.4999);
+          data_comp.push_back(temp_data);
+          word++;
+          lastVal = float(temp_data);
+        }
+        word--;
         std::vector<uint16_t> data;
-        data.push_back((*word) & 0x0fff);
-        for(size_t i = 0; i < 5; i++) { data.push_back((*(++word)) & 0x0fff); }
+        for(size_t i = 0; i < data_comp.size(); i++){
+          data.push_back(contractSign(data_comp[i]));
+        }
+//        data.push_back((*word) & 0x0fff);
+//        for(size_t i = 0; i < 5; i++) { data.push_back((*(++word)) & 0x0fff); }
         try{
 //            std::cout << "ROC " << roc_n << std::endl;
             LOG(logDEBUGPIPES) << "Trying to decode pixel: " << listVector(data, false, true);
