@@ -191,7 +191,7 @@ namespace pxar {
     std::vector<size_t> slidingWindow;
 //    uint8_t offsetB;
     std::vector<float> offsetB;
-      std::vector<float> level1Offset;
+      std::vector<float> level1s;
       std::vector<float> timeCompensator;
       std::vector<std::vector<int16_t> > c1Vect;
       std::vector<std::vector<int16_t> > c0Vect;
@@ -224,10 +224,18 @@ namespace pxar {
     slidingWindow.resize(16, 0);
     levelS.resize(16, 0);
     offsetB.clear();
-      level1Offset.resize(16, 0);
-      timeCompensator.resize(16, 0.13);
-    timeCompensator.at(0) = 0.14;
-    timeCompensator.at(1) = 0.14;
+      level1s.resize(16, 0);
+      timeCompensator.resize(16, 0);
+      // for telescope 69:
+//    timeCompensator.at(0) = 0.102;
+//    timeCompensator.at(1) = 0.103;
+//    timeCompensator.at(2) = 0.115;
+//    timeCompensator.at(3) = 0.113;
+      // for telescope 35:
+//    timeCompensator.at(0) = 0.066;
+//    timeCompensator.at(1) = 0.057;
+//    timeCompensator.at(2) = 0.052;
+//    timeCompensator.at(3) = 0.053;
     c0Vect.resize(4);
     c1Vect.resize(4);
     r1Vect.resize(4);
@@ -252,8 +260,8 @@ namespace pxar {
 //    void setOffset(std::vector<uint8_t> decodingOffsetVec) {offsetB.clear(); for(unsigned int roc_i = 0; roc_i < decodingOffsetVec.size(); roc_i++) offsetB.push_back(float(decodingOffsetVec[roc_i]));}
 //    void setOffset(std::vector<uint16_t> decodingOffsetVec) {offsetB.clear(); for(unsigned int roc_i = 0; roc_i < decodingOffsetVec.size(); roc_i++){if(decodingOffsetVec[roc_i] <= 256){offsetB.push_back(decodingOffsetVec[roc_i]);} else{offsetB.push_back(float(decodingOffsetVec[roc_i]) / 100.);}}}
     void setOffset(std::vector<float> decodingOffsetVec) {offsetB.clear(); for(unsigned int roc_i = 0; roc_i < decodingOffsetVec.size(); roc_i++) offsetB.push_back(float(decodingOffsetVec[roc_i]));}
-      void setLevel1Offsets(std::vector<float> level1OffsetsVec) {level1Offset.clear(); for(unsigned int roc_i = 0; roc_i < level1OffsetsVec.size(); roc_i++) level1Offset.push_back(float(level1OffsetsVec[roc_i]));}
-//      void setTimeCompensator(std::vector<float> timeCompensatorVec) {timeCompensator.clear(); for(unsigned int roc_i = 0; roc_i < timeCompensatorVec.size(); roc_i++) timeCompensator.push_back(float(timeCompensatorVec[roc_i]));}
+      void setLevel1s(std::vector<float> level1sVec) {level1s.clear(); for(unsigned int roc_i = 0; roc_i < level1sVec.size(); roc_i++) level1s.push_back(float(level1sVec[roc_i]));}
+      void setAlphas(std::vector<float> alphasVec) {timeCompensator.clear(); for(unsigned int roc_i = 0; roc_i < alphasVec.size(); roc_i++) timeCompensator.push_back(float(alphasVec[roc_i]));}
       void setLevelSUser(std::vector<float> levelSUserVec) {levelSUser.clear(); for(size_t it = 0; it < levelSUserVec.size(); it++) levelSUserVec.push_back(float(levelSUserVec[it]));}
       void setThresholds(const std::vector<std::vector<float> > values) { thresholds = values; hasThresholds = bool(!values.empty()); }
     void clearErrors() { roc_Event.clearPixelErrors(); }

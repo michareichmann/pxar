@@ -82,8 +82,8 @@ namespace pxar {
 
     if (level1 == 0) { throw DataDecodingError("Black & Ultrablack levels are seriously fucked up..."); }
     uint8_t level = uint8_t((expandSign(value) - level1Off + level1 + levelS - black) / level1);
-    if(isC1R2)
-      return level > 4 ? 4 : level;
+//    if(isC1R2)
+//      return level > 4 ? 4 : level;
     return level > 5 ? 5 : level;
   }
 

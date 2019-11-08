@@ -372,12 +372,13 @@ namespace pxar {
       // Here we have to assume the first two words are a ROC header because we rely on
       // its Ultrablack and Black level as initial values for auto-calibration:
 
-      lastVal = 0;
       if ((roc_n < 0 && !slidingWindow[roc_n + 1]) || foundHeader(roc_n, *word & 0x0fff, *(word + 1) & 0x0fff)) {
+//        lastVal = roc_n < 0? 0: lastVal;
+            lastVal = 0;
 
             roc_n++;
             // apply timing correction:
-            tword0 = int((float(expandSign((*word) & 0x0fff)) - timeCompensator.at(roc_n) * 0) / float(1 - timeCompensator.at(roc_n)) + 0.4999);
+            tword0 = int((float(expandSign((*word) & 0x0fff)) - timeCompensator.at(roc_n) * lastVal) / float(1 - timeCompensator.at(roc_n)) + 0.4999);
 //            tword0 = int((float(expandSign((*word) & 0x0fff) - level1Offset.at(roc_n)) - timeCompensator.at(roc_n) * 0) / float(1 - timeCompensator.at(roc_n)) + 0.4999);
             tword1 = int((float(expandSign((*(word + 1)) & 0x0fff)) - timeCompensator.at(roc_n) * float(tword0)) / float(1 - timeCompensator.at(roc_n)) + 0.4999);
 //            tword1 = int((float(expandSign((*(word + 1)) & 0x0fff) - level1Offset.at(roc_n)) - timeCompensator.at(roc_n) * float(tword0)) / float(1 - timeCompensator.at(roc_n)) + 0.4999);
