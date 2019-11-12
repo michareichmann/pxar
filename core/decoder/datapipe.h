@@ -185,7 +185,6 @@ namespace pxar {
     
     // Analog level averaging:
     void AverageAnalogLevel(int16_t word1, int16_t word2, int16_t roc_n);
-      void AverageAnalogLevelDiego(int16_t word1, int16_t word2, int16_t roc_n);
     std::vector<float> ultraBlack, black, levelSUser;
     std::vector<int16_t> levelS;
     std::vector<size_t> slidingWindow;
