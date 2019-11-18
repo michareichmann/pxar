@@ -26,14 +26,15 @@ path.insert(1, join(pxar_dir, 'python', 'src'))
 
 from ROOT import TCanvas, TCutG, gStyle, TColor, TMultiGraph, TH1I, TSpectrum
 from argparse import ArgumentParser
-from numpy import zeros, array, mean, delete
+from numpy import mean, delete, arange
+from numpy.random import randint
 from time import time, sleep
-from progressbar import Bar, ETA, FileTransferSpeed, Percentage, ProgressBar
 from pxar_helpers import *
 from pxar_plotter import Plotter
 from TreeWriterLjubljana import TreeWriterLjubljana
-from utils import *
+from hdf5_writer import HDF5Writer
 from json import dumps
+from draw import *
 
 dacdict = PyRegisterDictionary()
 probedict = PyProbeDictionary()
@@ -64,6 +65,7 @@ class CLIX:
         set_palette()
 
         self.Plotter = Plotter()
+        self.Draw = Draw()
 
     def restart_api(self):
         self.api = None
@@ -362,14 +364,15 @@ class CLIX:
         for column, row in zip(columns, rows):
             self.enable_pix(column, row, roc)
 
-    def enable_single_pixel(self, column=14, row=14, roc=None):
+    def enable_single_pixel(self, column=14, row=14, roc=None, prnt=True):
         """enableOnePixel [row] [column] [roc] : enables one Pixel (default 14/14); masks and disables the rest"""
-        print '--> disable and mask all pixels of all activated ROCs'
         self.disable_all(roc)
         self.enable_pix(column, row, roc)
-        print_string = '--> enable and unmask Pixel {c}/{r}: '.format(r=row, c=column)
-        print_string += '(' + ','.join('ROC {n}: {a}/{m}'.format(n=roc, a=self.get_activated(roc)[0], m=self.get_activated(roc)[1]) for roc in xrange(self.api.getNEnabledRocs())) + ')'
-        print print_string
+        if prnt:
+            print '--> disable and mask all pixels of all activated ROCs'
+            print_string = '--> enable and unmask Pixel {c}/{r}: '.format(r=row, c=column)
+            print_string += '(' + ','.join('ROC {n}: {a}/{m}'.format(n=roc, a=self.get_activated(roc)[0], m=self.get_activated(roc)[1]) for roc in xrange(self.api.getNEnabledRocs())) + ')'
+            print print_string
 
     def enable_all(self, roc=None):
         """enableAllPixel [roc]: enables and unmasks all Pixels of [roc]"""
@@ -661,6 +664,66 @@ class CLIX:
                 for col in xrange(52):
                     self.api.maskPixel(col, row, True, i2c)
 
+    def save_time(self, t=2, n=10000):
+        self.api.HVon()
+        w = HDF5Writer('main')
+        info('taking data ...')
+        t_start = time()
+        w.PBar.start(t * 60 * 10)
+        self.enable_single_pixel(14, 14, prnt=False)
+        self.daq_start()
+        while time() - t_start < t * 60:
+            self.daq_trigger(n)
+            for event in self.api.daqGetEventBuffer():
+                w.add_event(event)
+            sleep(.5)
+            w.PBar.update(int((time() - t_start) * 10))
+        self.daq_stop()
+        w.convert()
+        self.api.HVoff()
+
+    def save_random(self, n=10000, n_pixel=10):
+        self.api.HVon()
+        w = HDF5Writer('main')
+        info('taking data ...')
+        w.PBar.start(n_pixel)
+        for i in xrange(n_pixel):
+            self.enable_single_pixel(randint(0, 52), randint(0, 80), prnt=False)
+            self.daq_start()
+            self.daq_trigger(n)
+            for event in self.api.daqGetEventBuffer():
+                w.add_event(event)
+            self.daq_stop()
+            w.PBar.update(i)
+        w.convert()
+        self.api.HVoff()
+
+    def save_hdf5(self, t=1, random=False):
+        w = HDF5Writer('main')
+        self.api.HVon()
+        self.enable_all()
+        if random:
+            self.set_pg(cal=False, res=False, delay=20)
+        else:
+            self.trigger_source('extern')
+            self.set_dac('wbc', w.WBC)
+        self.daq_start()
+        t_start = time()
+        w.PBar.start(t * 600)
+        while time() - t_start < t * 60:
+            w.PBar.update(int((time() - t_start) * 10))
+            sleep(.1)
+            self.daq_trigger(10000) if random else sleep(.4)
+            try:
+                for event in self.api.daqGetEventBuffer():
+                    w.add_event(event)
+            except RuntimeError:
+                sleep(.5)
+        w.PBar.finish()
+        self.daq_stop()
+        w.convert()
+        self.api.HVoff()
+
     def save_data(self, n=240000):
         global BREAK
         t = TreeWriterLjubljana()
@@ -754,6 +817,14 @@ class CLIX:
         h = self.get_address_levels(n_trigger)
         self.Plotter.plot_histo(h)
         return h
+
+    def s_curve(self, col=14, row=14, ntrig=1000):
+        """ checkADCTimeConstant [vcal=200] [ntrig=10]: sends an amount of triggers for a fixed vcal in high/low region and prints adc values"""
+        self.enable_single_pixel(row, col)
+        efficiencies = [0 if not px else px[0].value / ntrig for px in self.api.getEfficiencyVsDAC('vcal', 1, 0, 255, nTriggers=ntrig)]
+        g = self.Draw.make_tgrapherrors('gsc', 'S-Curve for Pixel {} {}'.format(col, row), x=arange(256), y=efficiencies)
+        format_histo(g, x_tit='VCAL', y_tit='Efficiency [%]', y_off=1.3)
+        self.Draw.draw_histo(g, draw_opt='ap', lm=.12)
 
 
 
