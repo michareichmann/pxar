@@ -9,6 +9,7 @@ from ConfigParser import ConfigParser
 from datetime import datetime
 from ROOT import TFile, gROOT
 from numpy import average, sqrt
+from progressbar import Bar, ETA, FileTransferSpeed, Percentage, ProgressBar
 
 
 type_dict = {'int32': 'I',
@@ -131,3 +132,27 @@ def set_root_warnings(status):
 def set_root_output(status=True):
     gROOT.SetBatch(not status)
     set_root_warnings(status)
+
+
+def remove_letters(string):
+    return filter(lambda x: x.isdigit(), string)
+
+
+def remove_digits(string):
+    return filter(lambda x: not x.isdigit(), string)
+
+
+class PBar:
+    def __init__(self):
+        self.PBar = None
+        self.Widgets = ['Progress: ', Percentage(), ' ', Bar(marker='>'), ' ', ETA(), ' ', FileTransferSpeed()]
+
+    def start(self, n):
+        self.PBar = ProgressBar(widgets=self.Widgets, maxval=n).start()
+
+    def update(self, i):
+        self.finish() if i >= self.PBar.maxval - 1 else self.PBar.update(i + 1)
+
+
+    def finish(self):
+        self.PBar.finish()
