@@ -185,10 +185,21 @@ namespace pxar {
     
     // Analog level averaging:
     void AverageAnalogLevel(int16_t word1, int16_t word2, int16_t roc_n);
-    std::vector<float> ultraBlack, black;
+    std::vector<float> ultraBlack, black, levelSUser;
     std::vector<int16_t> levelS;
     std::vector<size_t> slidingWindow;
-    uint8_t offsetB;
+//    uint8_t offsetB;
+    std::vector<float> offsetB;
+      std::vector<float> level1s;
+      std::vector<float> timeCompensator;
+      std::vector<std::vector<int16_t> > c1Vect;
+      std::vector<std::vector<int16_t> > c0Vect;
+      std::vector<std::vector<int16_t> > r1Vect;
+      std::vector<std::vector<int16_t> > r0Vect;
+      std::vector<std::vector<int16_t> > blackVect;
+      std::vector<std::vector<int16_t> > ultraBlackVect;
+      std::vector<std::vector<int16_t> > lastDacVect;
+      std::vector<std::vector<int16_t> > crVect;
 
     /** Fixed level thresholds */
     bool hasThresholds;
@@ -202,20 +213,83 @@ namespace pxar {
     std::vector<std::string> event_ringbuffer;
 
   public:
-  dtbEventDecoder() : decodingStats(), readback_dirty(), count(), shiftReg(), readback(), eventID(-1), offsetB(0), hasThresholds(false), total_event(5), flawed_event(0),
+  dtbEventDecoder() : decodingStats(), readback_dirty(), count(), shiftReg(), readback(), eventID(-1), /*offsetB(0), */hasThresholds(false), total_event(5), flawed_event(0),
                       error_count(0), dump_count(0), event_ringbuffer(7) {
 
     /** initialise vectors */
     ultraBlack.resize(16, 0);
     black.resize(16, 0);
+      levelSUser.resize(16, 0);
     slidingWindow.resize(16, 0);
     levelS.resize(16, 0);
+    offsetB.clear();
+      level1s.resize(16, 0);
+      timeCompensator.resize(16, 0);
+      // for telescope 69:
+//    timeCompensator.at(0) = 0.102;
+//    timeCompensator.at(1) = 0.103;
+//    timeCompensator.at(2) = 0.115;
+//    timeCompensator.at(3) = 0.113;
+      // for telescope 35:
+//    timeCompensator.at(0) = 0.066;
+//    timeCompensator.at(1) = 0.057;
+//    timeCompensator.at(2) = 0.052;
+//    timeCompensator.at(3) = 0.053;
+    c0Vect.resize(4);
+    c1Vect.resize(4);
+    r1Vect.resize(4);
+    r0Vect.resize(4);
+    crVect.resize(4);
+    blackVect.resize(4);
+    ultraBlackVect.resize(4);
+    lastDacVect.resize(4);
+    for(size_t it=0; it<4; it++){
+      c0Vect[it].clear();
+      c1Vect[it].clear();
+      r1Vect[it].clear();
+      r0Vect[it].clear();
+      crVect[it].clear();
+      blackVect[it].clear();
+      ultraBlackVect[it].clear();
+      lastDacVect[it].clear();
+    }
   };
     void Clear() { decodingStats.clear(); readback.clear(); count.clear(); shiftReg.clear(); eventID = -1; };
-    void setOffset(uint8_t decodingOffset) { offsetB = decodingOffset; }
-    void setThresholds(const std::vector<std::vector<float> > values) { thresholds = values; hasThresholds = bool(!values.empty()); }
+    void setOffset(uint8_t decodingOffset) {offsetB.clear(); for(unsigned int roc_i = 0; roc_i < 16; roc_i++) offsetB.push_back(float(decodingOffset));}
+//    void setOffset(std::vector<uint8_t> decodingOffsetVec) {offsetB.clear(); for(unsigned int roc_i = 0; roc_i < decodingOffsetVec.size(); roc_i++) offsetB.push_back(float(decodingOffsetVec[roc_i]));}
+//    void setOffset(std::vector<uint16_t> decodingOffsetVec) {offsetB.clear(); for(unsigned int roc_i = 0; roc_i < decodingOffsetVec.size(); roc_i++){if(decodingOffsetVec[roc_i] <= 256){offsetB.push_back(decodingOffsetVec[roc_i]);} else{offsetB.push_back(float(decodingOffsetVec[roc_i]) / 100.);}}}
+    void setOffset(std::vector<float> decodingOffsetVec) {offsetB.clear(); for(unsigned int roc_i = 0; roc_i < decodingOffsetVec.size(); roc_i++) offsetB.push_back(float(decodingOffsetVec[roc_i]));}
+      void setLevel1s(std::vector<float> level1sVec) {level1s.clear(); for(unsigned int roc_i = 0; roc_i < level1sVec.size(); roc_i++) level1s.push_back(float(level1sVec[roc_i]));}
+      void setAlphas(std::vector<float> alphasVec) {timeCompensator.clear(); for(unsigned int roc_i = 0; roc_i < alphasVec.size(); roc_i++) timeCompensator.push_back(float(alphasVec[roc_i]));}
+      void setLevelSUser(std::vector<float> levelSUserVec) {levelSUser.clear(); for(size_t it = 0; it < levelSUserVec.size(); it++) levelSUserVec.push_back(float(levelSUserVec[it]));}
+      void setThresholds(const std::vector<std::vector<float> > values) { thresholds = values; hasThresholds = bool(!values.empty()); }
     void clearErrors() { roc_Event.clearPixelErrors(); }
-    bool foundHeader(int16_t, int16_t, int16_t);
+    bool foundHeader(int16_t, uint16_t, uint16_t);
+      std::vector<int16_t> Getc0Vect(int roc) {return c0Vect[roc];}
+      std::vector<int16_t> Getc1Vect(int roc) {return c1Vect[roc];}
+      std::vector<int16_t> Getr0Vect(int roc) {return r0Vect[roc];}
+      std::vector<int16_t> Getr1Vect(int roc) {return r1Vect[roc];}
+      std::vector<int16_t> GetcrVect(int roc) {return crVect[roc];}
+      std::vector<int16_t> GetblackVect(int roc) {return blackVect[roc];}
+      std::vector<int16_t> GetUblackVect(int roc) {return ultraBlackVect[roc];}
+      std::vector<int16_t> GetLastDacVect(int roc) {return lastDacVect[roc];}
+      void SetBlackVectors(std::vector<float> uBlackV, std::vector<float> blackV, std::vector<int16_t> levelSV, std::vector<float> decodeOffV){
+          for(size_t it = 0; it < uBlackV.size() and it < ultraBlack.size(); it++) ultraBlack[it] = uBlackV[it];
+          for(size_t it = 0; it < blackV.size() and it < black.size(); it++) black[it] = blackV[it];
+          for(size_t it = 0; it < levelSV.size() and it < levelS.size(); it++) levelS[it] = levelSV[it];
+          for(size_t it = 0; it < levelS.size(); it++) slidingWindow[it] = int(levelS[it] != 0);
+          for(size_t it = 0; it < decodeOffV.size() and it < offsetB.size(); it++) offsetB[it] = decodeOffV[it];}
+//      void SetBlackVectors(std::vector<float> uBlackV, std::vector<float> blackV, std::vector<int16_t> levelSV){
+//          for(size_t it = 0; it < uBlackV.size() and it < ultraBlack.size(); it++) ultraBlack[it] = uBlackV[it];
+//          for(size_t it = 0; it < blackV.size() and it < black.size(); it++) black[it] = blackV[it];
+//          for(size_t it = 0; it < levelSV.size() and it < levelS.size(); it++) levelS[it] = levelSV[it];
+//          for(size_t it = 0; it < levelS.size(); it++) slidingWindow[it] = int(levelS[it] != 0);}
+      std::vector<float> GetBlack() {return black;}
+      std::vector<float> GetUBlack() {return ultraBlack;}
+      std::vector<int16_t> GetLevelS() {return levelS;}
+      std::vector<float> GetDecodingOffsets() {return offsetB;}
+      void PrintWordWithSign(std::vector<uint16_t> word);
+      void PrintCodingVectors();
 
     statistics getStatistics();
     std::vector<std::vector<uint16_t> > getReadback();

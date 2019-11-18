@@ -336,15 +336,30 @@ namespace pxar {
 
   void dtbEventDecoder::DecodeADC(rawEvent * sample) {
     LOG(logDEBUGPIPES) << "Decoding ROC data from ADC...";
+    for(size_t it=0; it<4; it++){
+      c0Vect[it].clear();
+      c1Vect[it].clear();
+      r1Vect[it].clear();
+      r0Vect[it].clear();
+      crVect[it].clear();
+      blackVect[it].clear();
+      ultraBlackVect[it].clear();
+      lastDacVect[it].clear();
+    }
 
     int16_t roc_n = -1;
+      float lastVal = 0;
+      int16_t tword0 = 0;
+      int16_t tword1 = 0;
+      int16_t tword2 = 0;
 
     // Reserve expected number of pixels from data length (subtract ROC headers):
     if (static_cast<int>(sample->GetSize()) - 3*GetTokenChainLength() > 0) {
       roc_Event.pixels.reserve((sample->GetSize() - 3*GetTokenChainLength())/6);
     }
-
-    // Loop over the full data:
+//      PrintWordWithSign(sample->data);
+//      PrintCodingVectors();
+          // Loop over the full data:
     for(std::vector<uint16_t>::iterator word = sample->data.begin(); word != sample->data.end(); word++) {
 
       // Not enough data for anything, stop here - and assume it was half a pixel hit:
@@ -353,46 +368,91 @@ namespace pxar {
 	      break;
       }
 
-
       // Check if we have another ROC header (UB and B levels):
       // Here we have to assume the first two words are a ROC header because we rely on
       // its Ultrablack and Black level as initial values for auto-calibration:
 
-      if (roc_n < 0 || foundHeader(roc_n, *word & 0x0fff, *(word + 1) & 0x0fff)) {
-            roc_n++;
-            // Save the lastDAC value:
-            evalLastDAC(roc_n, (*(word+2)) & 0x0fff);
+      if ((roc_n < 0 && !slidingWindow[roc_n + 1]) || foundHeader(roc_n, *word & 0x0fff, *(word + 1) & 0x0fff)) {
+        lastVal = roc_n < 0? 0: lastVal;
+//            lastVal = 0;
 
-            // Iterate to improve ultrablack and black measurement:
-            AverageAnalogLevel((*word) & 0x0fff, (*(word+1)) & 0x0fff, roc_n);
+          roc_n++;
+          // apply timing correction:
+          float ttword0 = (float(expandSign((*word) & 0x0fff)) - timeCompensator.at(roc_n) * lastVal) / float(1 - timeCompensator.at(roc_n));
+          tword0 = ttword0 >= 0? int(ttword0 + 0.5) : int(ttword0 - 0.5);
+          float ttword1 = (float(expandSign((*(word + 1)) & 0x0fff)) - timeCompensator.at(roc_n) * float(tword0)) / float(1 - timeCompensator.at(roc_n));
+          tword1 = ttword1 >= 0? int(ttword1 + 0.5) : int(ttword1 - 0.5);
+          float ttword2 = (float(expandSign((*(word + 2)) & 0x0fff)) - timeCompensator.at(roc_n) * float(tword1)) / float(1 - timeCompensator.at(roc_n));
+          tword2 = ttword2 >= 0? int(ttword2 + 0.5) : int(ttword2 - 0.5);
+          if(0<=roc_n && roc_n <4) {
+              ultraBlackVect[roc_n].push_back(tword0);
+              blackVect[roc_n].push_back(tword1 - offsetB.at(roc_n));
+              lastDacVect[roc_n].push_back(tword2);
+          }
+          else {
+              std::cout << "A Fifth roc? in DecodeADC: " << std::endl;
+              std::cout << "black: " << expandSign((*word) & 0x0fff) << ", ultraB: " << expandSign((*(word+1)) & 0x0fff) << std::endl;
+          }
+          AverageAnalogLevel(tword0, tword1, roc_n);
+          // Save the lastDAC value:
+          evalLastDAC(roc_n, contractSign(tword2));
+//          evalLastDAC(roc_n, (*(word+2)) & 0x0fff);
 
+//            std::cout << "ROC Header: "
             LOG(logDEBUGPIPES)  << "ROC Header: "
                                 << expandSign((*word) & 0x0fff) << " (avg. " << ultraBlack.at(roc_n + 1) << ") (UB) "
                                 << expandSign((*(word+1)) & 0x0fff) << " (avg. " << black.at(roc_n + 1) << ") (B) "
                                 << expandSign((*(word+2)) & 0x0fff) << " (lastDAC) ";
+//            std::cout << std::endl;
             // Advance iterator:
             word +=  2;
+            lastVal = ttword2;
       }
       // We have a pixel hit:
       else {
         // Not enough data for a new pixel hit (six words):
         if(sample->data.end() - word < 6) {
           decodingStats.m_errors_pixel_incomplete++;
+            lastVal = 0;
           break;
         }
-
+        std::vector<int16_t> data_comp;
+        for(size_t i = 0; i < 6; i++){
+            lastVal = (float(expandSign((*word) & 0x0fff)) - timeCompensator.at(roc_n) * lastVal) / float(1 - timeCompensator.at(roc_n)); // this is applying time compensation
+            float temp_dataf = lastVal;
+            int temp_data = temp_dataf >= 0? int(temp_dataf + 0.5) : int(temp_dataf - 0.5);
+            data_comp.push_back(temp_data);
+            word++;
+        }
+        word--;
         std::vector<uint16_t> data;
-        data.push_back((*word) & 0x0fff);
-        for(size_t i = 0; i < 5; i++) { data.push_back((*(++word)) & 0x0fff); }
-
+        for(size_t i = 0; i < data_comp.size(); i++){
+            data.push_back(contractSign(data_comp[i]));
+        }
+//        data.push_back((*word) & 0x0fff);
+//        for(size_t i = 0; i < 5; i++) { data.push_back((*(++word)) & 0x0fff); }
         try{
 //            std::cout << "ROC " << roc_n << std::endl;
             LOG(logDEBUGPIPES) << "Trying to decode pixel: " << listVector(data, false, true);
+            if(0<=roc_n && roc_n < 4) {
+                c1Vect[roc_n].push_back(data_comp[0]);
+                c0Vect[roc_n].push_back(data_comp[1]);
+                r1Vect[roc_n].push_back(data_comp[2]);
+                r0Vect[roc_n].push_back(data_comp[3]);
+                crVect[roc_n].push_back(data_comp[4]);
+            }
+            else{
+                std::cout << "rocn is " << roc_n << " in DecodeADC P2" << std::endl;
+            }
             if (hasThresholds){
               pixel pix(data, roc_n, thresholds.at(roc_n));
               roc_Event.pixels.push_back(pix);
             }
             else {
+//              std::cout << "Pixel:\nroc: " << roc_n << ", data: ";
+//              for(size_t it = 0; it < data.size() - 1; it++)
+//                std::cout << int(expandSign(data[it])) << ", ";
+//              std::cout << std::endl;
               pixel pix(data, roc_n, int16_t(ultraBlack.at(roc_n)), int16_t(black.at(roc_n)));
               roc_Event.pixels.push_back(pix);
             }
@@ -569,29 +629,20 @@ namespace pxar {
     }
   }
 
-  void dtbEventDecoder::AverageAnalogLevel(int16_t word1, int16_t word2, int16_t roc_n) {
+    void dtbEventDecoder::AverageAnalogLevel(int16_t word1, int16_t word2, int16_t roc_n) {
+        offsetB.at(roc_n) = level1s.at(roc_n) - word2;
+        ultraBlack.at(roc_n) = word1;
+        black.at(roc_n)= level1s.at(roc_n);
+        levelS.at(roc_n) = static_cast<int16_t>((int(black.at(roc_n)) - int(ultraBlack.at(roc_n))) / 8);
+//        std::cout << "uB: " << ultraBlack.at(roc_n) << ", b: " << black.at(roc_n) << ", offsetB: " << offsetB.at(roc_n) << ", LS: " << levelS.at(roc_n) << std::endl;
+    }
 
-    ultraBlack.at(roc_n) = expandSign(word1 & 0x0fff);
-    black.at(roc_n) = expandSign(word2 & 0x0fff) + offsetB;
-//    // Take the mean for a window of 1000 samples, initial measurement included
-//    if(slidingWindow.at(roc_n) < 1000) {
-//      slidingWindow.at(roc_n)++;
-//      ultraBlack.at(roc_n) += (expandSign(word1 & 0x0fff) - ultraBlack.at(roc_n)) / slidingWindow.at(roc_n);
-//      black.at(roc_n) += (expandSign(word2 & 0x0fff) + offsetB - black.at(roc_n)) / slidingWindow.at(roc_n);
-//    }
-//    // Sliding window:
-//    else {
-//      ultraBlack.at(roc_n) = 999. / 1000 * ultraBlack.at(roc_n) + 1. / 1000 * expandSign(word1 & 0x0fff);
-//      black.at(roc_n) = 999. / 1000 * black.at(roc_n) + 1. / 1000 * (expandSign(word2 & 0x0fff) + offsetB);
-//    }
-    levelS.at(roc_n) = static_cast<int16_t>((int(black.at(roc_n)) - int(ultraBlack.at(roc_n))) / 8);
-  }
-
-  bool dtbEventDecoder::foundHeader(int16_t roc_n, int16_t word1, int16_t word2){
-    if (not slidingWindow.at(roc_n + 1))
-      return (roc_n + 1 == 0) ? true : (expandSign(word1) < ultraBlack.at(0) + 2 * levelS.at(0));
-    bool foundUB = (ultraBlack.at(roc_n + 1) - levelS.at(roc_n + 1) * 2 < expandSign(word1) && ultraBlack.at(roc_n + 1) + levelS.at(roc_n + 1) * 2 > expandSign(word1));
-    bool foundB = (black.at(roc_n + 1) - levelS.at(roc_n + 1) < offsetB + expandSign(word2) && black.at(roc_n + 1) + levelS.at(roc_n + 1) > offsetB + expandSign(word2));
+  bool dtbEventDecoder::foundHeader(int16_t roc_n, uint16_t word1, uint16_t word2){
+      if (not slidingWindow.at(roc_n + 1)) {
+        return (roc_n + 1 == 0) ? true : (expandSign(word1) < ultraBlack.at(0) + 4 * levelS.at(0));
+    }
+    bool foundUB = (expandSign(word1) <= int16_t(ultraBlack.at(roc_n + 1)) + levelS.at(roc_n + 1) * 4);
+    bool foundB = ((int16_t(black.at(roc_n + 1)) - 4 * levelS.at(roc_n + 1)) <= expandSign(word2) + offsetB.at(roc_n + 1) && expandSign(word2) + offsetB.at(roc_n + 1) <= (int16_t(black.at(roc_n + 1)) + 2 * levelS.at(roc_n + 1)));
     return foundB and foundUB;
   }
 
@@ -701,4 +752,38 @@ namespace pxar {
     xorsum.clear();
     return tmp;
   }
+
+    void dtbEventDecoder::PrintWordWithSign(std::vector<uint16_t> word){
+      std::cout << "The decoding word is: ";
+      for(std::vector<uint16_t>::iterator wordi = word.begin(); wordi != word.end(); wordi++)
+        std::cout << expandSign(*wordi & 0x0fff) << ", ";
+      std::cout << std::endl;
+    }
+
+    void dtbEventDecoder::PrintCodingVectors(){
+      std::cout << "Ultra black: ";
+      for(std::vector<float>::iterator ublacki = ultraBlack.begin(); ublacki != ultraBlack.end(); ublacki++)
+        std::cout << *ublacki << ", ";
+      std::cout << std::endl;
+      std::cout << "Black: ";
+      for(std::vector<float>::iterator blacki = black.begin(); blacki != black.end(); blacki++)
+        std::cout << *blacki << ", ";
+      std::cout << std::endl;
+      std::cout << "Level1: ";
+      for(std::vector<float>::iterator level1i = level1s.begin(); level1i != level1s.end(); level1i++)
+        std::cout << *level1i << ", ";
+      std::cout << std::endl;
+      std::cout << "LevelS: ";
+      for(std::vector<int16_t>::iterator levelsi = levelS.begin(); levelsi != levelS.end(); levelsi++)
+        std::cout << *levelsi << ", ";
+      std::cout << std::endl;
+      std::cout << "Sliding window: ";
+      for(std::vector<size_t>::iterator swi = slidingWindow.begin(); swi != slidingWindow.end(); swi++)
+        std::cout << *swi << ", ";
+      std::cout << std::endl;
+      std::cout << "Decoding offsets: ";
+      for(std::vector<float>::iterator doi = offsetB.begin(); doi != offsetB.end(); doi++)
+          std::cout << *doi << ", ";
+      std::cout << std::endl << std::endl;
+    }
 }

@@ -154,6 +154,10 @@ namespace pxar {
    */
   inline int16_t expandSign(int x) { return (x & 0x0800) ? static_cast<int16_t>(x - 4096) : static_cast<int16_t>(x); }
 
+    /** Helper function to encode the sign on recovered ADC analog data words (they have been applied expandSign)
+     */
+  inline uint16_t contractSign(int x) { return (x < 0) ? static_cast<uint16_t>(x + 4096) & 0x0fff : static_cast<uint16_t>(x) & 0x0fff;}
+
   /** Helper function to return a printed list of an integer vector, used to shield
    *  debug code from being executed if debug level is not sufficient
    */
