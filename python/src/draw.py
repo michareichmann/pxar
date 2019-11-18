@@ -9,7 +9,7 @@ from ROOT import gROOT, gStyle, kGreen, kOrange, kViolet, kYellow, kRed, kBlue, 
 from utils import *
 from os.path import dirname, join
 from numpy import ndarray, zeros, array
-from uncertainties.core import Variable, ufloat
+from uncertainties.core import Variable, ufloat, AffineScalarFunc
 from screeninfo import get_monitors
 
 
@@ -29,7 +29,7 @@ class Draw:
         self.colors = create_colorlist()
         self.FillColor = 821
         gStyle.SetLegendFont(42)
-        self.ActivateTitle = titles
+        self.Title = titles
         gStyle.SetOptTitle(titles)
 
         self.Objects = []
@@ -241,25 +241,35 @@ class Draw:
             info('Saving plots: {nam}'.format(nam=file_name), prnt=self.Verbose)
         set_root_output(True)
 
-    def save_histo(self, histo, save_name='test', show=True, sub_dir=None, lm=.1, rm=.03, bm=.1, tm=None, draw_opt='', x_fac=None, y_fac=None, leg=None, logy=None, logx=None,
-                   logz=None, canvas=None, grid=False, gridx=False, gridy=False, save=True, prnt=True, phi=None, theta=None):
-        tm = (.1 if self.ActivateTitle else .03) if tm is None else tm
-        x = self.Res if x_fac is None else int(x_fac * self.Res)
-        y = self.Res if y_fac is None else int(y_fac * self.Res)
+    def save_histo(self, histo, save_name='test', show=True, sub_dir=None, lm=None, rm=None, bm=None, tm=None, draw_opt=None, x=None, y=None, leg=None, logy=False, logx=False, logz=False,
+                   canvas=None, grid=False, gridx=False, gridy=False, save=True, prnt=True, phi=None, theta=None, sumw2=False):
+        fac = 1 if self.Title else 1.16
+        x = int(self.Res * fac) if x is None else int(x * self.Res)
+        y = self.Res if y is None else int(y * self.Res)
         h = histo
+        h.Sumw2(sumw2) if hasattr(h, 'Sumw2') and sumw2 is not None else do_nothing()
         set_root_output(show)
         c = TCanvas('c_{0}'.format(h.GetName()), h.GetTitle().split(';')[0], x, y) if canvas is None else canvas
-        c.SetMargin(lm, rm, bm, tm)
-        do([c.SetLogx, c.SetLogy, c.SetLogz], [logx, logy, logz])
-        do([c.SetGridx, c.SetGridy], [gridx or grid, gridy or grid])
-        do([c.SetPhi, c.SetTheta], [phi, theta])
-        h.Draw(draw_opt)
+        do(c.SetLeftMargin, lm)
+        do(c.SetRightMargin, rm if rm is not None else None if round(c.GetRightMargin(), 1) != .1 else .03)
+        do(c.SetBottomMargin, bm)
+        do(c.SetTopMargin, tm if tm is not None else None if round(c.GetTopMargin(), 1) != .1 else .1 if self.Title else .03)
+        c.SetLogx() if logx else do_nothing()
+        c.SetLogy() if logy else do_nothing()
+        c.SetLogz() if logz else do_nothing()
+        c.SetGridx() if gridx or grid else do_nothing()
+        c.SetGridy() if gridy or grid else do_nothing()
+        c.SetPhi(phi) if phi is not None else do_nothing()
+        c.SetTheta(theta) if theta is not None else do_nothing()
+        h.Draw(draw_opt if draw_opt is not None else 'ap' if 'Graph' in h.ClassName() else '')
         if leg is not None:
-            for i in [leg] if type(leg) is not list else leg:
+            leg = [leg] if type(leg) is not list else leg
+            for i in leg:
                 i.Draw()
         self.save_plots(save_name, sub_dir=sub_dir, prnt=prnt, save=save)
         set_root_output(True)
-        self.Objects.append([c, h, leg] if leg is not None else [c, h])
+        lst = [c, h, leg] if leg is not None else [c, h]
+        self.Objects.append(lst)
         return c
 
     # endregion
@@ -279,97 +289,12 @@ class Draw:
         return t
 
     @staticmethod
-    def format_histo(histo, name=None, title=None, x_tit='', y_tit='', z_tit='', marker=20, color=None, markersize=None, x_off=None, y_off=None, z_off=None, lw=1,
-                     fill_color=None, fill_style=None, stats=True, tit_size=None, lab_size=None, l_off_y=None, l_off_x=None, draw_first=False, x_range=None, y_range=None, z_range=None,
-                     do_marker=True, style=None, ndivx=None, ndivy=None, ncont=None, tick_size=None, t_ax_off=None, center_y=False, center_x=False, yax_col=None):
-        h = histo
-        if draw_first:
-            set_root_output(False)
-            h.Draw('a')
-            set_root_output(True)
-        do(h.SetTitle, title)
-        do(h.SetName, name)
-        try:
-            h.SetStats(stats)
-        except AttributeError or ReferenceError:
-            pass
-        # markers
-        try:
-            if do_marker:
-                do(h.SetMarkerStyle, marker)
-                do(h.SetMarkerColor, color)
-                do(h.SetMarkerSize, markersize)
-        except AttributeError or ReferenceError:
-            pass
-        # lines/fill
-        try:
-            h.SetLineColor(color) if color is not None else h.SetLineColor(h.GetLineColor())
-            h.SetLineWidth(lw)
-            h.SetFillColor(fill_color) if fill_color is not None else do_nothing()
-            h.SetFillStyle(fill_style) if fill_style is not None else do_nothing()
-            h.SetFillStyle(style) if style is not None else do_nothing()
-            h.SetContour(ncont) if ncont is not None else do_nothing()
-        except AttributeError or ReferenceError:
-            pass
-        # axis titles
-        try:
-            x_axis = h.GetXaxis()
-            if x_axis:
-                x_axis.SetTitle(x_tit) if x_tit else h.GetXaxis().GetTitle()
-                x_axis.SetTitleOffset(x_off) if x_off is not None else do_nothing()
-                do(x_axis.SetTitleSize, tit_size)
-                do(x_axis.SetLabelSize, lab_size)
-                x_axis.SetRangeUser(x_range[0], x_range[1]) if x_range is not None else do_nothing()
-                x_axis.SetNdivisions(ndivx) if ndivx is not None else do_nothing()
-                do(x_axis.SetLabelOffset, l_off_x)
-                do(x_axis.SetTickSize, tick_size)
-                x_axis.CenterTitle(center_x)
-            y_axis = h.GetYaxis()
-            if y_axis:
-                y_axis.SetTitle(y_tit) if y_tit else y_axis.GetTitle()
-                y_axis.SetTitleOffset(y_off) if y_off is not None else do_nothing()
-                do(y_axis.SetTitleSize, tit_size)
-                do(y_axis.SetLabelSize, lab_size)
-                do(y_axis.SetLabelOffset, l_off_y)
-                y_axis.SetRangeUser(y_range[0], y_range[1]) if y_range is not None else do_nothing()
-                do(y_axis.SetNdivisions, ndivy)
-                y_axis.CenterTitle(center_y)
-                do(y_axis.SetTitleColor, yax_col)
-                do(y_axis.SetLabelColor, yax_col)
-                do(y_axis.SetAxisColor, yax_col)
-            z_axis = h.GetZaxis()
-            if z_axis:
-                z_axis.SetTitle(z_tit) if z_tit else h.GetZaxis().GetTitle()
-                z_axis.SetTitleOffset(z_off) if z_off is not None else do_nothing()
-                do(z_axis.SetTitleSize, tit_size)
-                do(z_axis.SetLabelSize, lab_size)
-                z_axis.SetRangeUser(z_range[0], z_range[1]) if z_range is not None else do_nothing()
-        except AttributeError or ReferenceError:
-            pass
-        set_time_axis(h, off=t_ax_off) if t_ax_off is not None else do_nothing()
-
-    @staticmethod
     def format_pie(pie, h=None, r=None, text_size=None, angle3d=None, angle_off=None, label_format=None):
         do([pie.SetHeight, pie.SetRadius], [h, r])
         do(pie.SetTextSize, text_size)
         do(pie.SetAngle3D, angle3d)
         do(pie.SetLabelFormat, label_format)
         do(pie.SetAngularOffset, angle_off)
-
-    def format_statbox(self, x=.95, y=None, w=.16, entries=3, only_fit=False, fit=False, only_entries=False, opt=None, form=None):
-        y = .88 if self.ActivateTitle else .95 if y is None else y
-        if only_fit or fit:
-            gStyle.SetOptStat(1111 if fit else 0011)
-            gStyle.SetOptFit(1)
-        if only_entries:
-            gStyle.SetOptStat(1000000010 if not only_fit else 1000000011)
-            entries = 6 if entries == 3 else entries
-        gStyle.SetOptStat(opt) if opt is not None else do_nothing()
-        gStyle.SetFitFormat(form) if form is not None else do_nothing()
-        gStyle.SetStatX(x)
-        gStyle.SetStatY(y)
-        gStyle.SetStatW(w)
-        gStyle.SetStatH(.02 * entries)
 
     @staticmethod
     def format_frame(frame):
@@ -387,8 +312,7 @@ class Draw:
 
     # ----------------------------------------
     # region MAKING
-    @staticmethod
-    def make_tgrapherrors(name, title, color=1, marker=20, marker_size=1, width=1, asym_err=False, style=1, x=None, y=None, ex=None, ey=None):
+    def make_tgrapherrors(self, name, title, color=1, marker=20, marker_size=1, width=1, asym_err=False, style=1, x=None, y=None, ex=None, ey=None):
         x = list(x) if type(x) == ndarray else x
         if x is None:
             gr = TGraphErrors() if not asym_err else TGraphAsymmErrors()
@@ -402,6 +326,7 @@ class Draw:
         gr.SetMarkerSize(marker_size)
         gr.SetLineWidth(width)
         gr.SetLineStyle(style)
+        self.Objects.append(gr)
         return gr
 
     def make_legend(self, x1=.65, y2=.88, nentries=2, scale=1, name='l', y1=None, clean=False, margin=.25, x2=None):
@@ -438,6 +363,21 @@ class Draw:
     # endregion
     # ----------------------------------------
 
+    def format_statbox(self, x=.95, y=None, w=.2, n_entries=3, only_fit=False, fit=False, entries=False, form=None, m=False, rms=False, all_stat=False):
+        gStyle.SetOptFit(int(only_fit or fit))
+        opt_stat = '100000{}{}{}0'.format(*[1 if val else 0 for val in [rms, m, entries]] if not all_stat else [1, 1, 1])
+        if only_fit:
+            opt_stat = '0011'
+        if fit:
+            opt_stat = '1111'
+        y = (.88 if self.Title else .95) if y is None else y
+        gStyle.SetOptStat(int(opt_stat))
+        gStyle.SetFitFormat(form) if form is not None else do_nothing()
+        gStyle.SetStatX(x)
+        gStyle.SetStatY(y)
+        gStyle.SetStatW(w)
+        gStyle.SetStatH(.04 * n_entries)
+
 
 def create_colorlist():
     col_names = [kGreen, kOrange, kViolet, kYellow, kRed, kBlue, kMagenta, kAzure, kCyan, kTeal]
@@ -454,9 +394,9 @@ def make_graph_args(x, y, ex=None, ey=None):
         warning('Arrays have different size!')
         return []
     lx = len(x)
-    if type(x[0]) is Variable:
-        return [lx, array([v.n for v in x], 'd'), array([v.n for v in y], 'd'), array([v.s for v in x], 'd'), array([v.s for v in y], 'd')]
-    return [lx, array(x, 'd'), array(y, 'd'), array(ex, 'd') if ex is not None else zeros(lx), array(ey, 'd') if ey is not None else zeros(lx)]
+    x = x if type(x[0]) in [Variable, AffineScalarFunc] else [make_ufloat(tup) for tup in zip(x, zeros(lx) if ex is None else ex)]
+    y = y if type(y[0]) in [Variable, AffineScalarFunc] else [make_ufloat(tup) for tup in zip(y, zeros(lx) if ey is None else ey)]
+    return [lx, array([v.n for v in x], 'd'), array([v.n for v in y], 'd'), array([v.s for v in x], 'd'), array([v.s for v in y], 'd')]
 
 
 def make_transparent(pad):
@@ -497,27 +437,107 @@ def load_resolution():
 
 
 def make_ufloat(tup):
-    if type(tup) is Variable:
+    if type(tup) in [Variable, AffineScalarFunc]:
         return tup
-    return ufloat(tup[0], tup[1])
-
-
-def set_statbox(x=.95, y=.88, w=.16, entries=3, only_fit=False, fit=False, only_entries=False, opt=None, form=None):
-    if only_fit or fit:
-        gStyle.SetOptStat(1111 if fit else 0011)
-        gStyle.SetOptFit(1)
-    if only_entries:
-        gStyle.SetOptStat(1000000010 if not only_fit else 1000000011)
-        entries = 6 if entries == 3 else entries
-    gStyle.SetOptStat(opt) if opt is not None else do_nothing()
-    gStyle.SetFitFormat(form) if form is not None else do_nothing()
-    gStyle.SetStatX(x)
-    gStyle.SetStatY(y)
-    gStyle.SetStatW(w)
-    gStyle.SetStatH(.02 * entries)
+    if type(tup) in [tuple, list, ndarray]:
+        return ufloat(*tup) if type(tup[0]) not in [Variable, AffineScalarFunc] else ufloat(tup[0].n, tup[1].n)
+    return ufloat(tup, 0)
 
 
 def set_z_range(zmin, zmax):
     c = get_last_canvas()
     h = c.GetListOfPrimitives()[1]
     h.GetZaxis().SetRangeUser(zmin, zmax)
+
+
+def format_histo(histo, name=None, title=None, x_tit=None, y_tit=None, z_tit=None, marker=20, color=None, line_color=None, markersize=None, x_off=None, y_off=None, z_off=None, lw=1,
+                 fill_color=None, fill_style=None, stats=True, tit_size=None, lab_size=None, l_off_y=None, l_off_x=None, draw_first=False, x_range=None, y_range=None, z_range=None, sumw2=None,
+                 do_marker=True, style=None, ndivx=None, ndivy=None, ncont=None, tick_size=None, t_ax_off=None, center_y=False, center_x=False, yax_col=None, normalise=None, pal=None, rebin=None):
+    h = histo
+    if draw_first:
+        set_root_output(False)
+        h.Draw('nostack' if h.ClassName() == 'THStack' else 'a')
+        set_root_output(True)
+    do(h.SetTitle, title)
+    do(h.SetName, name)
+    do(set_palette, pal)
+    if normalise is not None:
+        y_tit = y_tit.replace('Number', 'Percentage') if y_tit is not None else y_tit
+        h.Sumw2(True)
+        normalise_histo(h)
+    try:
+        h.SetStats(stats)
+    except AttributeError or ReferenceError:
+        pass
+    do(h.Rebin, rebin) if hasattr(h, 'Rebin') else do_nothing()
+    # markers
+    try:
+        if do_marker:
+            do(h.SetMarkerStyle, marker)
+            do(h.SetMarkerColor, color)
+            do(h.SetMarkerSize, markersize)
+    except AttributeError or ReferenceError:
+        pass
+    # lines/fill
+    try:
+        h.SetLineColor(line_color) if line_color is not None else h.SetLineColor(color) if color is not None else do_nothing()
+        h.SetLineWidth(lw)
+        h.SetFillColor(fill_color) if fill_color is not None else do_nothing()
+        h.SetFillStyle(fill_style) if fill_style is not None else do_nothing()
+        h.SetFillStyle(style) if style is not None else do_nothing()
+        h.SetContour(ncont) if ncont is not None else do_nothing()
+    except AttributeError or ReferenceError:
+        pass
+    # axes
+    try:
+        x_args = [x_tit, x_off, tit_size, center_x, lab_size, l_off_x, x_range, ndivx, tick_size, ]
+        y_args = [y_tit, y_off, tit_size, center_y, lab_size, l_off_y, y_range, ndivy, tick_size, yax_col]
+        z_args = [z_tit, z_off, tit_size, False, lab_size, None, z_range, None, tick_size]
+        for i, name in enumerate(['X', 'Y', 'Z']):
+            format_axis(getattr(h, 'Get{}axis'.format(name))(), is_graph(h), *[x_args, y_args, z_args][i])
+    except AttributeError or ReferenceError:
+        pass
+    set_time_axis(h, off=t_ax_off) if t_ax_off is not None else do_nothing()
+    do(h.Sumw2, sumw2) if hasattr(h, 'Sumw2') else do_nothing()
+
+
+def format_axis(axis, graph, title, tit_offset, tit_size, centre_title, lab_size, label_offset, limits, ndiv, tick_size, color=None):
+    do(axis.SetTitle, title)
+    do(axis.SetTitleOffset, tit_offset)
+    do(axis.SetTitleSize, tit_size)
+    axis.CenterTitle(centre_title)
+    do(axis.SetLabelSize, lab_size)
+    do(axis.SetLabelOffset, label_offset)
+    if limits is not None:
+        axis.SetLimits(*limits) if graph and 'xaxis' in axis.GetName() else axis.SetRangeUser(*limits)
+    do(axis.SetNdivisions, ndiv)
+    do(axis.SetTickSize, tick_size)
+    do(axis.SetTitleColor, color)
+    do(axis.SetLabelColor, color)
+    do(axis.SetAxisColor, color)
+
+
+def normalise_histo(histo, x_range=None, from_min=False):
+    h = histo
+    x_axis = h.GetXaxis()
+    x_axis.SetRangeUser(*x_range) if x_range is not None else do_nothing()
+    min_bin = h.GetMinimumBin() if from_min else 0
+    integral = h.Integral(min_bin, h.GetNbinsX() - 1)
+    return scale_histo(h, integral)
+
+
+def scale_histo(histo, value=None, to_max=False, x_range=None):
+    h = histo
+    maximum = h.GetBinContent(h.GetMaximumBin())
+    if x_range is not None:
+        h.GetXaxis().SetRangeUser(*x_range) if x_range is not None else do_nothing()
+        maximum = h.GetBinContent(h.GetMaximumBin())
+        h.GetXaxis().UnZoom()
+    value = maximum if to_max else value
+    if value:
+        h.Scale(1. / value)
+    return h
+
+
+def is_graph(h):
+    return 'Graph' in h.ClassName()
