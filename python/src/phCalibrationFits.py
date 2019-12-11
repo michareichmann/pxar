@@ -325,11 +325,11 @@ class phCalibrationFits:
 if __name__ == '__main__':
 	parser = OptionParser()
 	parser.add_option('-f', '--file', dest='file', type='str', help='file containing the vcal adc for each pixel')
-	parser.add_option('-i', '--i2c', dest='i2c', type='int', help='i2c of the device')
-	parser.add_option('-n', '--ntriggs', dest='ntriggs', type='int', default=20, help='number of triggers sent per vcal')
-	parser.add_option('-t', '--trimmval', dest='trimmval', type='int', default=35, help='trimm value used')
-	parser.add_option('--after2019', dest='after2019', default=False, action='store_true', help='If the data was taken after 2019, then no overlap exists in the vcals histogram')
-	parser.add_option('--fitfunction', default='erf', type='str', help='fit function to use. The options are: "erf" (default), "tanh", "weibull"')
+	parser.add_option('-i', '--i2c', dest='i2c', type='int', help='i2c of the device. Used for saving the mask file if desired')
+	parser.add_option('-n', '--ntriggs', dest='ntriggs', type='int', default=20, help='number of triggers sent per vcal. Used to estimate the uncertainties on the raw data')
+	parser.add_option('-t', '--trimmval', dest='trimmval', type='int', default=35, help='trimm value used. Used to give priority to the fit for vcals starting from trimmval')
+	parser.add_option('--after2019', dest='after2019', default=False, action='store_true', help='If the data was taken after 2019, then no overlap exists in the vcals histogram. Do not use it if data was taken before December 2019 test beam')
+	parser.add_option('--fitfunction', default='erf', type='str', help='fit function to use. The options implemented are: "erf" (default), "tanh", "weibull"')
 
 	(options, args) = parser.parse_args()
 	ffile = str(options.file)
