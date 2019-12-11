@@ -24,7 +24,7 @@ fit_params_high = {'erf': {0: 10000, 1: 10000, 2: 10, 3: 10000},
                   'weibull': {0: 10000, 1: 2, 2: 128, 3: 1000}}
                   # 'weibull': {0: 1000000, 1: 2, 2: 1000, 3: 1000}}
 
-fit_method = ('Minuit2', 'Migrad',)
+fit_method = ('Minuit2', 'Migrad',)  # found to be the best for this case
 # fit_method = ('Minuit2', 'Scan',)
 # fit_method = ('Minuit2', 'Simplex',)
 # fit_method = ('Fumili2',)
@@ -34,6 +34,12 @@ fit_method = ('Minuit2', 'Migrad',)
 
 
 def Correct_Path(path, times=2):
+	"""
+	This method is used to get the correct path to the file regardless to how it is passed
+	:param path: path to file. can be absolute or relative
+	:param times: number of times to iterate the method. sometimes 2 iterations are required
+	:return: returns the full absolute path of the one given
+	"""
 	abs_path = ''
 	if path[0] == '~':
 		abs_path += os.path.expanduser('~')
@@ -48,12 +54,18 @@ def Correct_Path(path, times=2):
 
 
 def RoundInt(n, nptype='int32'):
+	"""
+	Method used to round to the nearest integer. It can be used on arrays or single numbers
+	:param n: The number to be rounded
+	:param nptype: The type used before returning. It is used for truncation. It follows numpy dtype
+	:return: a number or a list of the rounded number in the defined type (int or float)
+	"""
 	val = np.floor(np.add(n, 0.5, dtype='f8'), dtype='f8').astype(nptype)
-	if nptype.lower().startswith('i'):
+	if 'i' in nptype.lower():
 		if val.size == 1:
 			return int(val)
 		return list(val)
-	elif nptype.lower().startswith('f'):
+	elif 'f' in nptype.lower():
 		if val.size == 1:
 			return float(val)
 		return list(val)
@@ -105,6 +117,10 @@ class phCalibrationFits:
 		self.canvas = {}
 
 	def ReadPhFile(self):
+		"""
+		This method reads and fits the phCalibration file given to the class. It uses the information on number of triggers used, function to fit, and trimming value.
+		:return: Nada :D
+		"""
 		if os.path.isfile(self.ph_file):
 			with open(self.ph_file) as ff0:
 				lines = ff0.readlines()
@@ -131,6 +147,13 @@ class phCalibrationFits:
 				bar.finish()
 
 	def EstimateLowHighIfStacked(self, col, row):
+		"""
+		If the data is stacked, that is before the December 2019 fix after desy test beam and there are more than 100 vcals in the lower range, then this method estimates the mixed information
+		The corrected data is updated in the dictionary pix_data[col][row]
+		:param col: column of the pixel
+		:param row: row of the pixel
+		:return: Nada :D
+		"""
 		if self.is_data_stacked:
 			estimated_missing_low = np.zeros(self.vcals_high.size)
 			if self.vcals_low.size > 100 + self.vcals_high.size:
@@ -146,6 +169,12 @@ class phCalibrationFits:
 				self.pix_data[col][row][it - self.vcals_high.size] = estimated_compensated_high[it]
 
 	def SetGraph(self, col, row):
+		"""
+		Sets up the graph for fitting the raw data. The object is stored in a dictionary pix_graph[col][row]
+		:param col: column of the pixel
+		:param row: row of the pixel
+		:return: Nada :D
+		"""
 		if col not in self.pix_graph.keys():
 			self.pix_graph[col] = {}
 		if self.vcals_all.size == 1:
@@ -164,10 +193,16 @@ class phCalibrationFits:
 		self.pix_graph[col][row].SetMarkerStyle(ro.TAttMarker.kFullDotMedium)
 
 	def FitPixel(self, col, row):
+		"""
+		This method does the fitting for a given pixel. the fitted data is stored in the dictionary pix_fit_probab[col][row]. Dictionary pix_masked[col][row] is initialized
+		:param col: column of the pixel
+		:param row: row of the pixel
+		:return: Nada :D
+		"""
 		if col not in self.pix_fit.keys():
 			self.pix_fit[col] = {}
 		self.pix_fit[col][row] = ro.TF1('{f}_{c}_{r}'.format(f=self.fit_func, c=col, r=row), fit_functions[self.fit_func], 0, 255 * self.high_scale)
-		self.pix_fit[col][row].SetNpx(10000)
+		self.pix_fit[col][row].SetNpx(int(255 * self.high_scale))
 		self.pix_fit[col][row].SetParameters(fit_parms[self.fit_func])
 		for param in xrange(len(fit_parms[self.fit_func])):
 			self.pix_fit[col][row].SetParLimits(param, fit_params_low[self.fit_func][param], fit_params_high[self.fit_func][param])
@@ -188,6 +223,10 @@ class phCalibrationFits:
 		self.pix_masked[col][row] = False
 
 	def SaveFitsFile(self):
+		"""
+		This method saves the new fitted parameters stored in pix_fit dictionary. If the file already exists, a time stamp is appended to avoid overwriting. The user is then free to decide which file to keep
+		:return: Nada :D
+		"""
 		fit_file_name = self.ph_file_name.split('Calibration')[0] + 'CalibrationFit' + self.fit_func.capitalize() + self.ph_file_name.split('Calibration')[1]
 		if os.path.isfile('{d}/{f}'.format(d=self.ph_file_dir, f=fit_file_name)):
 			date = time.localtime()
@@ -206,6 +245,13 @@ class phCalibrationFits:
 					f1.write('    Pix {c} {r}\n'.format(c=col, r=row))
 
 	def PrintBadPixelsCalibration(self, th=0.9, minNDF=9):
+		"""
+		This method is used to identify bad pixels using how good the fitting was. The pixels are printed and a description of why they are flagged is shown. The inefficiency is shown to guide the user in the coarse selection of the parameters
+		A more detailed study using PlotPixelFit is suggested to define the final parameters
+		:param th: the threshold used by the fitter to estimate how good was the fit taking into accound the chi2 and the ndf. It is highly suceptible to the errors (n_triggers). It should be changed accordingly
+		:param minNDF: minimum number of degrees of freedon for the fit. It is up to the user to define what this minimum should be. Usually less than 8 is bad for any of the fitted functions as they have 4 parameters
+		:return: Nada :D
+		"""
 		ineff = 0
 		tot = 0
 		for col, rowpf in self.pix_fit_probab.iteritems():
@@ -223,6 +269,13 @@ class phCalibrationFits:
 		print 'Total calibration inefficiency: {v}% ({v2} pixels)'.format(v=ineff * 100. / tot, v2=ineff)
 
 	def PlotPixelFit(self, col, row):
+		"""
+		This method is used to plot the raw data with the fit and show information of the fit. It is used to help decide whether the particular pixel should survive the masking or not
+		This method should be used in tandem with PrintBadPixelsCalibration to make correct decisions for the mask file
+		:param col: Column of the pixel
+		:param row: Row of the pixel
+		:return: Nada :D
+		"""
 		if col not in self.canvas.keys():
 			self.canvas[col] = {}
 		if row not in self.canvas[col].keys():
@@ -245,6 +298,13 @@ class phCalibrationFits:
 		ro.gPad.Update()
 
 	def SaveMaskFile(self, th=0.9, minNDF=8, maskBorders=True):
+		"""
+		This method creates a mask file excluding the pixels that are cutted by the parameters "th" and "minNDF". If the file already exists, a time stamp is appended to let the user decide which file to keep
+		:param th: minimum allowed probab of the fitted parameters given the data.
+		:param minNDF: minimum allowed number of degrees of freedom used for the fitting
+		:param maskBorders: boolean variable. If true, the mask file will also contain the borders
+		:return: Nada :D
+		"""
 		self.PrintBadPixelsCalibration(th, minNDF)
 		mask_file_name = 'Mask_' + self.ph_file_name.split('Calibration')[0] + 'CalibrationFit' + self.fit_func.capitalize() + self.ph_file_name.split('Calibration')[1].replace('.dat', '') + '_th_' + str(th) + '_minDNF_' + str(minNDF) + '.dat'
 		if os.path.isfile('{d}/{f}'.format(d=self.ph_file_dir, f=mask_file_name)):
