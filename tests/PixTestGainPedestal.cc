@@ -217,9 +217,11 @@ void PixTestGainPedestal::measure() {
  
   vector<uint8_t> rocIds = fApi->_dut->getEnabledRocIDs(); 
 
-  shist256 *pshistBlock  = new (fPixSetup->fPxarMemory) shist256[16*52*80]; 
-  shist256 *ph;
-  
+  shist600 *pshistBlock  = new (fPixSetup->fPxarMemory) shist600[16*52*80];
+  shist600 *ph;
+//  shist256 *pshistBlock  = new (fPixSetup->fPxarMemory) shist256[16*52*80];
+//  shist256 *ph;
+
   int idx(0);
   fHists.clear();
   for (unsigned int iroc = 0; iroc < rocIds.size(); ++iroc) {
@@ -227,7 +229,7 @@ void PixTestGainPedestal::measure() {
       for (unsigned int ir = 0; ir < 80; ++ir) {
 	idx = PixUtil::rcr2idx(iroc, ic, ir); 
 	ph = pshistBlock + idx;
-	fHists.push_back(ph); 
+	fHists.push_back(ph);
       }
     }
   }
@@ -313,7 +315,8 @@ void PixTestGainPedestal::measure() {
     int dacbin(-1); 
     for (unsigned int v = 0; v < fHpoints.size(); ++v) {
       if (fHpoints[v] == dac) {
-	dacbin = 100 + v; 
+	dacbin = 300 + v;
+//	dacbin = 100 + v;
 	break;
       }
     }

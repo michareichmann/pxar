@@ -29,8 +29,8 @@ private:
 
   int         fParNtrig, fParShowFits, fParExtended, fParDumpHists, fVcalStep;
 
-  std::vector<shist256*>  fHists;
-  std::vector<shist600*>  fHists600;
+  std::vector<shist600*>  fHists;
+//  std::vector<shist256*>  fHists;
   std::vector<int>        fLpoints, fHpoints;
 
   ClassDef(PixTestGainPedestal, 1)
