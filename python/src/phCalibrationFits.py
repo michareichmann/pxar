@@ -152,7 +152,7 @@ class phCalibrationFits:
 			self.vcals_all = np.concatenate([self.vcals_low, self.vcals_high]).astype('f8')
 		yerrsl = np.sqrt(np.divide(self.pix_data[col][row], self.n_triggs, dtype='f8'), dtype='f8')
 		# yerrsh = np.sqrt(np.divide(self.pix_data[col][row], self.n_triggs, dtype='f8'), dtype='f8')
-		yerrsh = np.where(self.pix_data[col][row] < 255, np.sqrt(np.divide(self.pix_data[col][row], self.n_triggs, dtype='f8'), dtype='f8'), 50).astype('f8')
+		yerrsh = np.where(self.pix_data[col][row] < 255, np.sqrt(np.divide(self.pix_data[col][row], self.n_triggs, dtype='f8'), dtype='f8'), 200).astype('f8')
 		self.pix_graph[col][row] = ro.TGraphAsymmErrors(self.vcals_all.size, self.vcals_all, self.pix_data[col][row].astype('f8'), np.zeros(self.vcals_all.size, 'f8'), np.zeros(self.vcals_all.size, 'f8'), yerrsl, yerrsh)
 		self.pix_graph[col][row].GetYaxis().SetRangeUser(0, 255)
 		self.pix_graph[col][row].GetXaxis().SetTitle('Vcal [ADC]')

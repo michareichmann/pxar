@@ -84,6 +84,7 @@ void PixSetup::init() {
   //  fPxarMemory = std::malloc(300000000);
 //  fPxarMemory = std::calloc(N, sizeof(shist256));
   fPxarMemory = std::calloc(N, sizeof(shist600));
+//  fPxarMemHi  = ((shist256*)fPxarMemory) + N;
   fPxarMemHi  = ((shist600*)fPxarMemory) + N;
 
   LOG(logDEBUG) << "fPixTestParameters = " << fPixTestParameters;
