@@ -18,9 +18,9 @@ void shist600::clear() {
 void shist600::fill(int x, float w) {
   if (x < 0) {
     fX[0] += w; 
-  } else if (256 < i && i < 299) {
+  } else if (256 < x && x < 299) {
       fX[257] += w;
-  } else if (299 <= i && i < 300) {
+  } else if (299 <= x && x < 300) {
       fX[300] += w;
   } else if (x > 556) {
     fX[NBINS+1] += w; 
