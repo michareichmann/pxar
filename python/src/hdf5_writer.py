@@ -44,6 +44,10 @@ class HDF5Writer(FileWriter):
                     grp.create_dataset('clusters', data=self.Clusters[roc])
                     grp.create_dataset('n_clusters', data=self.NClusters[roc])
 
+    def add_data(self, data):
+        for event in data:
+            self.add_event(event)
+
     def add_event(self, event):
         if not event.pixels:
             return
