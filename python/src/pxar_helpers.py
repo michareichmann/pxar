@@ -379,7 +379,7 @@ def PxarStartup(directory, verbosity, trim=None):
             ("PG_TRG",0))
        # Start an API instance from the core pxar library
     try:
-        api = PyPxarCore(usbId=config.get("testboardName"),logLevel=verbosity)
+        api = PyPxarCore(usbId=config.get("testboardName"), logLevel=verbosity)
     except RuntimeError as e:
         critical(e)
         return
