@@ -801,6 +801,14 @@ class PxarCoreCmd(cmd.Cmd):
         """setOffset"""
         self.api.setDecodingOffset(os)
 
+    def do_setL1Offsets(self, os):
+        """setOffset"""
+        self.api.setDecodingL1Offset(os)
+
+    def do_setAlphaOffsets(self, os):
+        """setOffset"""
+        self.api.setDecodingAlphas(os)
+
     def complete_setOffset(self):
         # return help for the cmd
         return [self.do_setOffset.__doc__, '']

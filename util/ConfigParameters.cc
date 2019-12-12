@@ -81,6 +81,8 @@ void ConfigParameters::initialize() {
   fProbeD2 = "ctr";
   fOffsetDecoding = 0;
   fOffsetDecodingVector.clear();
+  fOffsetL1Vector.clear();
+  fAlphasVector.clear();
   fDecodingThresholds.resize(0);
 
   rocZeroAnalogCurrent = 0.0;
