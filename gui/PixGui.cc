@@ -347,8 +347,6 @@ TGMainFrame(p, 1, 1, kVerticalFrame), fWidth(w), fHeight(h) {
   if (fApi) fParTab->updateSelection(); // ensure that fId2Idx for all tests is initialized
 
   vector<string> tests = fTestParameters->getTests();
-  cout << string(30, '=') << endl;
-  for (size_t i = 0; i < tests.size(); i++) cout << tests.at(i) << endl;
   for (size_t i = 0; i < tests.size(); ++i) {
     createTab(tests[i].c_str()); 
   }
