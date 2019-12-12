@@ -80,8 +80,9 @@ void ConfigParameters::initialize() {
   fProbeD1 = "clk";
   fProbeD2 = "ctr";
   fOffsetDecoding = 0;
-  fOffsetDecodingVector.clear();
+  fOffsetDecodingVector.resize(16, 0);
   fDecodingThresholds.resize(0);
+  fOffsetL1Vector.resize(16, 0);
 
   rocZeroAnalogCurrent = 0.0;
   fRocType = "psi46digv21respin";
