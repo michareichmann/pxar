@@ -1908,6 +1908,13 @@ std::vector<uint16_t> hal::daqBuffer() {
   return raw;
 }
 
+void hal::clearBuffer() {
+
+  for(size_t ch = 0; ch < m_src.size(); ch++)
+    _testboard->Daq_MemReset(ch);
+  _testboard->Flush();
+}
+
 void hal::daqTriggerSource(uint16_t source) {
 
   // Update the locally cached setting for trigger source:

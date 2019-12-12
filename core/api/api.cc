@@ -1566,6 +1566,11 @@ std::vector<uint16_t> pxarCore::daqGetBuffer() {
   return buffer;
 }
 
+void pxarCore::daqClear() {
+
+  _hal->clearBuffer();
+}
+
 std::vector<rawEvent> pxarCore::daqGetRawEventBuffer() {
 
   // Reading out all data from the DTB and returning the raw blob.

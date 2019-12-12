@@ -351,6 +351,10 @@ namespace pxar {
      */
     std::vector<uint16_t> daqBuffer();
 
+
+    /** Clearing the whole DTB buffer */
+    void clearBuffer();
+
     /** Reading out the full undecoded DAQ buffer
      */
     std::vector<rawEvent> daqAllRawEvents();

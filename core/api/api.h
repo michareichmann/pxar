@@ -751,6 +751,8 @@ namespace pxar {
      */
     bool daqSingleSignal(std::string triggerSignal);
 
+    void daqClear();
+
     /** Function to read out the earliest pxar::Event in buffer from the current
      *  data acquisition session.
      *
