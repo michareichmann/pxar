@@ -160,8 +160,8 @@ cdef class Statistics:
         return "Decoding statistics..."
     cdef c_clone(self, statistics s):
         self.thisobj = s
-    property dump:
-        def __get__(self): self.thisobj.dump()
+    def dump(self):
+        self.thisobj.dump()
     property errors:
         def __get__(self): return self.thisobj.errors()
     property info_words_read:
@@ -693,6 +693,9 @@ cdef class PyPxarCore:
 
     def daqStatus(self):
         return self.thisptr.daqStatus()
+
+    def daqClear(self):
+        self.thisptr.daqClear()
 
     def daqTriggerSource(self, string source, uint32_t period = 0):
         return self.thisptr.daqTriggerSource(source, period)
