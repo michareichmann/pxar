@@ -33,6 +33,7 @@ typedef char int8_t;
 #include "PixSetup.hh"
 #include "PixTestParameters.hh"
 #include "shist256.hh"
+#include "shist600.hh"
 
 typedef struct { 
   uint16_t dac;
@@ -116,10 +117,13 @@ public:
   int pixelThreshold(std::string dac, int ntrig, int dacmin, int dacmax);
   /// scan a dac range. Will call preScan to protect against r/o problems. 
   void dacScan(std::string dac, int ntrig, int dacmin, int dacmax, std::vector<shist256*> maps, int ihit, int flag = 0);
+  void dacScan(std::string dac, int ntrig, int dacmin, int dacmax, std::vector<shist600*> maps, int ihit, int flag = 0);
   /// kind of another work-around (splitting the range, adjusting ntrig, etc)
   void preScan(std::string dac, std::vector<shist256*> maps, int &dacmin, int &dacmax);
+  void preScan(std::string dac, std::vector<shist600*> maps, int &dacmin, int &dacmax);
   /// do the scurve analysis
   void scurveAna(std::string dac, std::string name, std::vector<shist256*> maps, std::vector<TH1*> &resultMaps, int result);
+  void scurveAna(std::string dac, std::string name, std::vector<shist600*> maps, std::vector<TH1*> &resultMaps, int result);
   /// determine PH error interpolation
   void getPhError(std::string dac, int dacmin, int dacmax, int FLAGS, int ntrig);
   /// returns TH2D's with pulseheight maps

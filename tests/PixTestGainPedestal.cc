@@ -217,9 +217,11 @@ void PixTestGainPedestal::measure() {
  
   vector<uint8_t> rocIds = fApi->_dut->getEnabledRocIDs(); 
 
-  shist256 *pshistBlock  = new (fPixSetup->fPxarMemory) shist256[16*52*80]; 
-  shist256 *ph;
-  
+  shist600 *pshistBlock  = new (fPixSetup->fPxarMemory) shist600[16*52*80];
+  shist600 *ph;
+//  shist256 *pshistBlock  = new (fPixSetup->fPxarMemory) shist256[16*52*80];
+//  shist256 *ph;
+
   int idx(0);
   fHists.clear();
   for (unsigned int iroc = 0; iroc < rocIds.size(); ++iroc) {
@@ -227,7 +229,7 @@ void PixTestGainPedestal::measure() {
       for (unsigned int ir = 0; ir < 80; ++ir) {
 	idx = PixUtil::rcr2idx(iroc, ic, ir); 
 	ph = pshistBlock + idx;
-	fHists.push_back(ph); 
+	fHists.push_back(ph);
       }
     }
   }
@@ -313,7 +315,8 @@ void PixTestGainPedestal::measure() {
     int dacbin(-1); 
     for (unsigned int v = 0; v < fHpoints.size(); ++v) {
       if (fHpoints[v] == dac) {
-	dacbin = 100 + v; 
+	dacbin = 300 + v;  // for shist600
+//	dacbin = 100 + v;  // for shist256
 	break;
       }
     }
@@ -421,8 +424,10 @@ void PixTestGainPedestal::fit() {
       h1->SetBinError(fLpoints[ib]+1, fracErr*fHists[i]->get(ib+1)); 
     }
     for (int ib = 0; ib < static_cast<int>(fHpoints.size()); ++ib) {
-      h1->SetBinContent(7*fHpoints[ib]+1, fHists[i]->get(100+ib+1));
-      h1->SetBinError(7*fHpoints[ib]+1, fracErr*fHists[i]->get(100+ib+1)); 
+//      h1->SetBinContent(7*fHpoints[ib]+1, fHists[i]->get(100+ib+1)); // for shist256
+      h1->SetBinContent(7*fHpoints[ib]+1, fHists[i]->get(300+ib+1)); // for shist600
+//      h1->SetBinError(7*fHpoints[ib]+1, fracErr*fHists[i]->get(100+ib+1)); // for shist256
+      h1->SetBinError(7*fHpoints[ib]+1, fracErr*fHists[i]->get(300+ib+1)); // for shist600
     }
     if (0 == mode) {
       f = fPIF->gpErr(h1); 
@@ -569,7 +574,8 @@ void PixTestGainPedestal::printHistograms() {
       }
       
       for (int ib = 0; ib < static_cast<int>(fHpoints.size()); ++ib) {
-	line += Form(" %3d", static_cast<int>(fHists[i]->get(100+ib+1))); 
+//	line += Form(" %3d", static_cast<int>(fHists[i]->get(100+ib+1))); // for shist256
+	line += Form(" %3d", static_cast<int>(fHists[i]->get(300+ib+1))); // for shist600
       }
       
       line += Form("    Pix %2d %2d", ic, ir); 

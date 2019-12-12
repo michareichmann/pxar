@@ -105,6 +105,7 @@ public:
   std::vector<uint8_t> getI2cAddresses() {return fI2cAddresses;}
   uint8_t getDecodingOffset() { return fOffsetDecoding; }
   std::vector<float> getDecodingL1Offset() { return fOffsetL1Vector;}
+  std::vector<float> getDecodingAlphas() { return fAlphasVector;}
   std::vector<uint8_t> getDecodingOffsetVector() { return fOffsetDecodingVector; }
   std::vector<std::vector<float> > getDecodingThresholds() { return fDecodingThresholds; }
 
@@ -197,6 +198,7 @@ private:
   uint8_t fOffsetDecoding;
   std::vector<uint8_t> fOffsetDecodingVector;
   std::vector<float> fOffsetL1Vector;
+  std::vector<float> fAlphasVector;
   std::vector<std::vector<float> > fDecodingThresholds;
 
   std::string fTBParametersFileName;

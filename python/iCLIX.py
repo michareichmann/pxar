@@ -142,6 +142,14 @@ class CLIX:
         self.api.setDecodingOffset(value)
         print 'set analogue decoding offset to: {}'.format(value)
 
+    def set_L1_offset(self, value):
+        self.api.setDecodingL1Offset(value)
+        print 'set analogue L1 decoding offset to: {}'.format(value)
+
+    def set_alphas(self, value):
+        self.api.setDecodingAlphas(value)
+        print 'set analogue decoding alphas to: {}'.format(value)
+
     @staticmethod
     def decode_digital(value):
         # 0x0fff0fff -> 0xffffff

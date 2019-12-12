@@ -277,6 +277,7 @@ namespace pxar {
 //    void setDecodingOffset(std::vector<uint16_t> offsetV);
     void setDecodingOffset(std::vector<float> offsetV);
     void setDecodingL1Offset(std::vector<float> offsetV);
+    void setDecodingAlphas(std::vector<float> offsetV);
     void setDecodingThresholds(std::vector<std::vector<float> >);
 
     bool initDUT(std::vector<uint8_t> hubIds,

@@ -99,6 +99,8 @@ void pxarCore::setDecodingThresholds(std::vector<std::vector<float> > values) { 
 
 void pxarCore::setDecodingL1Offset(std::vector<float> offsetl1v){ _hal->setLevel1s(offsetl1v);}
 
+void pxarCore::setDecodingAlphas(std::vector<float> alphas){ _hal->setAlphas(alphas);}
+
 void pxarCore::setPatternGenerator(std::vector<std::pair<std::string,uint8_t> > pg_setup) {
   if(!_hal->status()) {
     LOG(logERROR) << "Pattern generator not updated!";

@@ -392,6 +392,8 @@ def PxarStartup(directory, verbosity, trim=None):
     if not any(word in roc_type for word in ['dig', 'proc']):
         print 'Analogue decodingOffset set to:', int(config.get("decodingOffset", 0))
         api.setDecodingOffset(int(config.get("decodingOffset", int(0))))
+        api.setDecodingL1Offset(int(config.get("decodingL1Offset", int(0))))
+        api.setDecodingAlphas(int(config.get("decodingAlphas", int(0))))
     if roc_type == 'psi46v2' and 'analogueThresholds'.lower() in config.config:
         thresholds = loads(config.get('analoguethresholds', [[]]))
         api.setDecodingThresholds(thresholds)

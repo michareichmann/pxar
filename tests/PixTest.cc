@@ -226,12 +226,15 @@ vector<TH1*> PixTest::scurveMaps(string dac, string name, int ntrig, int dacmin,
   print(Form("dac: %s name: %s ntrig: %d dacrange: %d .. %d (%d/%d) %s flags = %d (plus default)",
              dac.c_str(), name.c_str(), ntrig, dacmin, dacmax, dacsperstep, ntrigperstep, type.c_str(), flag));
 
-  vector<shist256*>  maps;
+  vector<shist600*>  maps;
+//  vector<shist256*>  maps;
   vector<TH1*>       resultMaps;
   resultMaps.clear();
 
-  shist256 *pshistBlock  = new (fPixSetup->fPxarMemory) shist256[16*52*80];
-  shist256 *ph;
+  shist600 *pshistBlock  = new (fPixSetup->fPxarMemory) shist600[16*52*80];
+  shist600 *ph;
+//  shist256 *pshistBlock  = new (fPixSetup->fPxarMemory) shist256[16*52*80];
+//  shist256 *ph;
   rsstools rss;
 
   int idx(0);
@@ -1549,9 +1552,212 @@ void PixTest::preScan(string dac, vector<shist256*> maps, int &dacmin, int &dacm
 
 }
 
+void PixTest::preScan(string dac, vector<shist600*> maps, int &dacmin, int &dacmax) {
+  PixTest::update();
+  uint16_t FLAGS = FLAG_FORCE_MASKED | FLAG_DUMP_FLAWED_EVENTS;
+
+  vector<uint8_t> rocIds = fApi->_dut->getEnabledRocIDs();
+
+  bool done(false);
+  int ntrig(3), cnt(0);
+  vector<pair<uint8_t, vector<pixel> > > results;
+
+  while (!done){
+    LOG(logDEBUG) << "      attempt #" << cnt;
+    try{
+      results = fApi->getEfficiencyVsDAC(dac, 1, 200, FLAGS, ntrig);
+      fNDaqErrors = fApi->getStatistics().errors_pixel();
+      done = true;
+    } catch(pxarException &/*e*/) {
+      fNDaqErrors = 666667;
+      ++cnt;
+    }
+    done = (cnt>5) || done;
+  }
+
+  if (666667 == fNDaqErrors) {
+    LOG(logDEBUG) << "fNDaqErrors = " << fNDaqErrors;
+    return;
+  }
+
+  int idx(0), roc(0), ic(0), ir(0);
+  double val(0.);
+  for (unsigned int idac = 0; idac < results.size(); ++idac) {
+    int dac = results[idac].first;
+    for (unsigned int ipix = 0; ipix < results[idac].second.size(); ++ipix) {
+      ic =   results[idac].second[ipix].column();
+      ir =   results[idac].second[ipix].row();
+      roc = results[idac].second[ipix].roc();
+      if (ic > 51 || ir > 79) {
+        LOG(logDEBUG) << "bad pixel address encountered: ROC/col/row = " << roc << "/" << ic << "/" << ir;
+        continue;
+      }
+      val =  results[idac].second[ipix].value();
+      idx = PixUtil::rcr2idx(getIdxFromId(roc), ic, ir);
+      if (idx > -1) maps[idx]->fill(dac, val);
+    }
+  }
+
+
+  // -- analyze results
+  bool ok(false);
+  TH1D *hT = new TH1D("hT", "hT", 256, 0., 256.); hT->Sumw2();
+  TH1D *h1 = new TH1D("h1", "h1", 556, 0., 556.); h1->Sumw2();
+  for (unsigned int iroc = 0; iroc < rocIds.size(); ++iroc) {
+    LOG(logDEBUG) << "analyzing ROC " << static_cast<int>(rocIds[iroc]);
+    for (unsigned int i = iroc*4160; i < (iroc+1)*4160; ++i) {
+      if (maps[i]->getSumOfWeights() < 1) continue;
+
+      h1->Reset();
+      for (int ib = 1; ib <= 556; ++ib) {
+        h1->SetBinContent(ib, maps[i]->get(ib));
+        h1->SetBinError(ib, ntrig*PixUtil::dBinomial(static_cast<int>(maps[i]->get(ib)), ntrig));
+      }
+
+      ok = threshold(h1);
+      if (!ok) {
+        LOG(logDEBUG) << "problem with threshold determination";
+      }
+      if (fThreshold > 0) {
+        hT->Fill(fThreshold);
+//      TH1D *h = (TH1D*)h1->Clone(Form("h1_%d", i));
+//      h->SetTitle(Form("OK i = %d, thr = %4.3f, thrn = %4.3f", i, fThreshold, fThresholdN));
+//      fHistList.push_back(h);
+      } else {
+        hT->Fill(0.);
+//      TH1D *h = (TH1D*)h1->Clone(Form("h1_%d", i));
+//      h->SetTitle(Form("i = %d, thr = %4.3f, thrn = %4.3f", i, fThreshold, fThresholdN));
+//      fHistList.push_back(h);
+      }
+
+//       if (fThreshold > 80.) {
+//      TH1D *h = (TH1D*)h1->Clone(Form("h1_%d", i));
+//      h->SetTitle(Form("i = %d, thr = %4.3f, thrn = %4.3f", i, fThreshold, fThresholdN));
+//      fHistList.push_back(h);
+//       }
+    }
+  }
+
+  int lo(-1), hi(-1);
+  for (int i = 1; i < 256; ++i) {
+    if (hT->Integral(i, i+5) > 5) {
+      lo = i;
+      break;
+    }
+  }
+
+  for (int i = lo; i < 255; ++i) {
+    if (0 == hT->Integral(i, i+5)) {
+      hi = i;
+      break;
+    }
+  }
+
+  if (lo > hi) {
+    lo = 1;
+    hi = 255;
+  }
+
+  dacmin = lo;
+  dacmax = hi;
+
+  fHistList.push_back(hT);
+  fDisplayedHist = find(fHistList.begin(), fHistList.end(), hT);
+  hT->Draw();
+  PixTest::update();
+
+}
+
 
 // ----------------------------------------------------------------------
 void PixTest::dacScan(string dac, int ntrig, int dacmin, int dacmax, vector<shist256*> maps, int ihit, int FLAGS) {
+  //  uint16_t FLAGS = flag | FLAG_FORCE_MASKED;
+
+  FLAGS |= FLAG_DUMP_FLAWED_EVENTS;
+
+  bool unmasked = (0 != (FLAGS & FLAG_CHECK_ORDER))  &&  (0 != (FLAGS & FLAG_FORCE_UNMASKED));
+
+  //  fNtrig = ntrig;
+
+  vector<uint8_t> rocIds = fApi->_dut->getEnabledRocIDs();
+
+  TH2D *h3(0);
+  if (unmasked) {
+    LOG(logDEBUG) << "booking xray maps for unmasked detector";
+    fXrayMaps.clear();
+    for (unsigned int iroc = 0; iroc < rocIds.size(); ++iroc){
+      h3 = bookTH2D(Form("%s_xraymap_C%d", dac.c_str(), rocIds[iroc]),
+                    Form("%s_xraymap_C%d", dac.c_str(), rocIds[iroc]),
+                    52, 0., 52., 80, 0., 80.);
+      fHistOptions.insert(make_pair(h3, "colz"));
+      h3->SetMinimum(0.);
+      h3->SetDirectory(fDirectory);
+      setTitles(h3, "col", "row");
+      fXrayMaps.push_back(h3);
+    }
+  }
+
+  int ic, ir, iroc;
+  double val;
+  bool done = false;
+  int cnt(0);
+  vector<pair<uint8_t, vector<pixel> > > results;
+
+  if (2 == ihit) {
+    LOG(logDEBUG) << "determine PH error: " << dacmin << " .. " << dacmax;
+    getPhError(dac, dacmin, dacmax, FLAGS, ntrig);
+  }
+
+  while (!done){
+    LOG(logDEBUG) << "      attempt #" << cnt;
+    try{
+      gSystem->ProcessEvents();
+      if (fStopTest) done = true;
+      if (1 == ihit) {
+        results = fApi->getEfficiencyVsDAC(dac, dacmin, dacmax, FLAGS, ntrig);
+        fNDaqErrors = fApi->getStatistics().errors_pixel();
+      } else {
+        results = fApi->getPulseheightVsDAC(dac, dacmin, dacmax, FLAGS, ntrig);
+        fNDaqErrors = fApi->getStatistics().errors_pixel();
+      }
+      done = true;
+    } catch(pxarException &/*e*/) {
+      fNDaqErrors = 666667;
+      ++cnt;
+    }
+    done = (cnt>5) || done;
+  }
+
+  int idx(0);
+  for (unsigned int idac = 0; idac < results.size(); ++idac) {
+    int dac = results[idac].first;
+    for (unsigned int ipix = 0; ipix < results[idac].second.size(); ++ipix) {
+      ic =   results[idac].second[ipix].column();
+      ir =   results[idac].second[ipix].row();
+      iroc = results[idac].second[ipix].roc();
+      if (ic > 51 || ir > 79) {
+        LOG(logDEBUG) << "bad pixel address encountered: ROC/col/row = " << iroc << "/" << ic << "/" << ir;
+        continue;
+      }
+      val =  results[idac].second[ipix].value();
+      idx = PixUtil::rcr2idx(getIdxFromId(iroc), ic, ir);
+      if (unmasked) {
+        h3 = fXrayMaps[getIdxFromId(iroc)];
+        if (results[idac].second[ipix].value() > 0) {
+          if (idx > -1) maps[idx]->fill(dac, val);
+        } else {
+          h3->Fill(results[idac].second[ipix].column(), results[idac].second[ipix].row(), 1);
+        }
+      } else {
+        if (idx > -1) maps[idx]->fill(dac, val);
+      }
+
+    }
+  }
+
+}
+
+void PixTest::dacScan(string dac, int ntrig, int dacmin, int dacmax, vector<shist600*> maps, int ihit, int FLAGS) {
   //  uint16_t FLAGS = flag | FLAG_FORCE_MASKED;
 
   FLAGS |= FLAG_DUMP_FLAWED_EVENTS;
@@ -1688,6 +1894,132 @@ void PixTest::scurveAna(string dac, string name, vector<shist256*> maps, vector<
       // -- calculated "proper" errors
       h1->Reset();
       for (int ib = 1; ib <= 256; ++ib) {
+        h1->SetBinContent(ib, maps[i]->get(ib));
+        h1->SetBinError(ib, fNtrig*PixUtil::dBinomial(static_cast<int>(maps[i]->get(ib)), fNtrig));
+      }
+
+      bool ok = threshold(h1);
+      if (((result & 0x10) && !ok) || (result & 0x20)) {
+        TH1D *h1c = (TH1D*)h1->Clone(Form("scurve_%s_c%d_r%d_C%d", dac.c_str(), ic, ir, rocIds[iroc]));
+        if (!ok) {
+          h1c->SetTitle(Form("problematic %s scurve (c%d_r%d_C%d), thr = %4.3f", dac.c_str(), ic, ir, rocIds[iroc], fThreshold));
+        } else {
+          h1c->SetTitle(Form("%s scurve (c%d_r%d_C%d), thr = %4.3f", dac.c_str(), ic, ir, rocIds[iroc], fThreshold));
+        }
+        fHistList.push_back(h1c);
+      }
+      h2->SetBinContent(ic+1, ir+1, fThreshold);
+      h2->SetBinError(ic+1, ir+1, fThresholdE);
+
+      h3->SetBinContent(ic+1, ir+1, fSigma);
+      h3->SetBinError(ic+1, ir+1, fSigmaE);
+
+      h4->SetBinContent(ic+1, ir+1, fThresholdN);
+
+      // -- write file
+      if (dumpFile) {
+        int NSAMPLES(32);
+        int ibin = h1->FindBin(fThreshold);
+        int bmin = ibin - 15;
+        line = Form("%2d %3d", NSAMPLES, bmin);
+        for (int ix = bmin; ix < bmin + NSAMPLES; ++ix) {
+          line += string(Form(" %3d", static_cast<int>(h1->GetBinContent(ix+1))));
+        }
+        OutputFile << line << endl;
+      }
+    }
+    if (dumpFile) OutputFile.close();
+
+    if (result & 0x1) {
+      resultMaps.push_back(h2);
+      fHistList.push_back(h2);
+    }
+    if (result & 0x2) {
+      resultMaps.push_back(h3);
+      fHistList.push_back(h3);
+    }
+    if (result & 0x4) {
+      resultMaps.push_back(h4);
+      fHistList.push_back(h4);
+    }
+
+    if (result & 0x8) {
+      if (result & 0x1) {
+        TH1* d1 = distribution((TH2D*)h2, 256, 0., 256.);
+        resultMaps.push_back(d1);
+        fHistList.push_back(d1);
+      }
+      if (result & 0x2) {
+        TH1* d2 = distribution((TH2D*)h3, 100, 0., 6.);
+        resultMaps.push_back(d2);
+        fHistList.push_back(d2);
+      }
+      if (result & 0x4) {
+        TH1* d3 = distribution((TH2D*)h4, 256, 0., 256.);
+        resultMaps.push_back(d3);
+        fHistList.push_back(d3);
+      }
+    }
+
+  }
+
+  fDisplayedHist = find(fHistList.begin(), fHistList.end(), h2);
+
+  delete h1;
+
+  if (h2) h2->Draw("colz");
+  PixTest::update();
+
+}
+
+void PixTest::scurveAna(string dac, string name, vector<shist600*> maps, vector<TH1*> &resultMaps, int result) {
+  fDirectory->cd();
+  TH1* h2(0), *h3(0), *h4(0);
+  //  string fname("SCurveData");
+  ofstream OutputFile;
+  string line;
+  string empty("32  93   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0 ");
+  bool dumpFile(false);
+  vector<uint8_t> rocIds = fApi->_dut->getEnabledRocIDs();
+  int roc(0), ic(0), ir(0);
+  TH1D *h1 = new TH1D("h1", "h1", 556, 0., 556.); h1->Sumw2();
+
+  for (unsigned int iroc = 0; iroc < rocIds.size(); ++iroc) {
+    LOG(logDEBUG) << "analyzing ROC " << static_cast<int>(rocIds[iroc]);
+    h2 = bookTH2D(Form("thr_%s_%s_C%d", name.c_str(), dac.c_str(), rocIds[iroc]),
+                  Form("thr_%s_%s_C%d", name.c_str(), dac.c_str(), rocIds[iroc]),
+                  52, 0., 52., 80, 0., 80.);
+    fHistOptions.insert(make_pair(h2, "colz"));
+
+    h3 = bookTH2D(Form("sig_%s_%s_C%d", name.c_str(), dac.c_str(), rocIds[iroc]),
+                  Form("sig_%s_%s_C%d", name.c_str(), dac.c_str(), rocIds[iroc]),
+                  52, 0., 52., 80, 0., 80.);
+    fHistOptions.insert(make_pair(h3, "colz"));
+
+    h4 = bookTH2D(Form("thn_%s_%s_C%d", name.c_str(), dac.c_str(), rocIds[iroc]),
+                  Form("thn_%s_%s_C%d", name.c_str(), dac.c_str(), rocIds[iroc]),
+                  52, 0., 52., 80, 0., 80.);
+    fHistOptions.insert(make_pair(h4, "colz"));
+
+    string lname(name);
+    transform(lname.begin(), lname.end(), lname.begin(), ::tolower);
+    //    if (!name.compare("scurveVcal") || !lname.compare("scurvevcal")) {
+    if (fOutputFilename != "") {
+      dumpFile = true;
+      LOG(logINFO) << "dumping ASCII scurve output file: " << fOutputFilename;
+      OutputFile.open(Form("%s/%s_C%d.dat", fPixSetup->getConfigParameters()->getDirectory().c_str(), fOutputFilename.c_str(), iroc));
+      OutputFile << "Mode 1 " << "Ntrig " << fNtrig << endl;
+    }
+
+    for (unsigned int i = iroc*4160; i < (iroc+1)*4160; ++i) {
+      PixUtil::idx2rcr(i, roc, ic, ir);
+      if (maps[i]->getSumOfWeights() < 1) {
+        if (dumpFile) OutputFile << empty << endl;
+        continue;
+      }
+      // -- calculated "proper" errors
+      h1->Reset();
+      for (int ib = 1; ib <= 556; ++ib) {
         h1->SetBinContent(ib, maps[i]->get(ib));
         h1->SetBinError(ib, fNtrig*PixUtil::dBinomial(static_cast<int>(maps[i]->get(ib)), fNtrig));
       }

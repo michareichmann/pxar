@@ -3,6 +3,7 @@
 
 #include "PixTest.hh"
 #include "shist256.hh"
+#include "shist600.hh"
 
 class DLLEXPORT PixTestGainPedestal: public PixTest {
 public:
@@ -28,7 +29,8 @@ private:
 
   int         fParNtrig, fParShowFits, fParExtended, fParDumpHists, fVcalStep;
 
-  std::vector<shist256*>  fHists;
+  std::vector<shist600*>  fHists;
+//  std::vector<shist256*>  fHists;
   std::vector<int>        fLpoints, fHpoints;
 
   ClassDef(PixTestGainPedestal, 1)

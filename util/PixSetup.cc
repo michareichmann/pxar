@@ -5,6 +5,7 @@
 
 #include "rsstools.hh"
 #include "shist256.hh"
+#include "shist600.hh"
 
 using namespace std;
 using namespace pxar;
@@ -81,8 +82,10 @@ void PixSetup::init() {
   LOG(logDEBUG) << "PixSetup init start; getCurrentRSS() = " << rss.getCurrentRSS();
   int N(100000);
   //  fPxarMemory = std::malloc(300000000);
-  fPxarMemory = std::calloc(N, sizeof(shist256));
-  fPxarMemHi  = ((shist256*)fPxarMemory) + N;
+//  fPxarMemory = std::calloc(N, sizeof(shist256));
+  fPxarMemory = std::calloc(N, sizeof(shist600));
+//  fPxarMemHi  = ((shist256*)fPxarMemory) + N;
+  fPxarMemHi  = ((shist600*)fPxarMemory) + N;
 
   LOG(logDEBUG) << "fPixTestParameters = " << fPixTestParameters;
   LOG(logDEBUG) << " fConfigParameters = " << fConfigParameters;

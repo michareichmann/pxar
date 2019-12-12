@@ -9,6 +9,7 @@ PixTestParameters.cc
 PixMonitor.cc
 rsstools.cc
 shist256.cc
+shist600.cc
 )
 
 # fill list of header files 

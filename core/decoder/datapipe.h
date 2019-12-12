@@ -288,6 +288,8 @@ namespace pxar {
       std::vector<float> GetUBlack() {return ultraBlack;}
       std::vector<int16_t> GetLevelS() {return levelS;}
       std::vector<float> GetDecodingOffsets() {return offsetB;}
+      std::vector<float> getDecodingL1Offset() {return level1s;}
+      std::vector<float> getDecodingAlphas() {return timeCompensator;}
       void PrintWordWithSign(std::vector<uint16_t> word);
       void PrintCodingVectors();
 

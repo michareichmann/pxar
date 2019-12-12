@@ -5,6 +5,7 @@
 
 #include "rsstools.hh"
 #include "shist256.hh"
+#include "shist600.hh"
 
 #include <TString.h>
 #include <TTimeStamp.h>
