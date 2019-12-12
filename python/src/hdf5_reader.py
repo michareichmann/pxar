@@ -115,7 +115,8 @@ if __name__ == '__main__':
 
     from argparse import ArgumentParser
     aparser = ArgumentParser()
-    aparser.add_argument('run', nargs='?', default=None)
+    aparser.add_argument('run', nargs='?', default=None, help='run number [default = the last saved run]')
+    aparser.add_argument('-c', '--config', nargs='?', default='main', help='name of the ini config file (without .ini) [default = main]')
     pargs = aparser.parse_args()
 
-    z = HDF5Reader(pargs.run)
+    z = HDF5Reader(pargs.run, config=pargs.config)

@@ -4,6 +4,8 @@
 # created on February 15th 2018 by M. Reichmann (remichae@phys.ethz.ch)
 # --------------------------------------------------------
 
+from ROOT import PyConfig
+PyConfig.IgnoreCommandLineOptions = True
 from ROOT import TGraphErrors, TGaxis, TLatex, TGraphAsymmErrors, TCanvas, TLegend, TArrow, TPad, TCutG, TLine, TPaveText, TPaveStats
 from ROOT import gROOT, gStyle, kGreen, kOrange, kViolet, kYellow, kRed, kBlue, kMagenta, kAzure, kCyan, kTeal
 from utils import *
