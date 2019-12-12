@@ -66,6 +66,7 @@ class CLIX:
 
         self.Plotter = Plotter()
         self.Draw = Draw()
+        self.PBar = PBar()
 
     def restart_api(self):
         self.api = None
@@ -84,9 +85,9 @@ class CLIX:
         for line in f.readlines():
             if line.startswith('#'):
                 continue
-            print line.strip('\n\r')
             data = line.split()
             arguments = [float(word) if is_num(word) else word for word in data[1:]]
+            print 'z.{f}({args})'.format(f=data[0], args=dumps(arguments).strip('[]'))
             exec 'z.{f}({args})'.format(f=data[0], args=dumps(arguments).strip('[]'))
 
     @staticmethod
@@ -196,6 +197,10 @@ class CLIX:
 
     def get_n_rocs(self):
         return self.api.getNEnabledRocs()
+
+    def cycle_tb(self):
+        self.daq_start()
+        self.daq_stop()
     # endregion
 
     # -----------------------------------------
