@@ -228,7 +228,44 @@ class CLIX:
         except RuntimeError:
             return
 
-    def get_data(self, n):
+    def get_data(self, wbc, t, n=None, random_trig=False):
+        self.api.HVon()
+        if random_trig:
+            self.set_pg(cal=False, res=False, delay=20)
+        else:
+            self.signal_probe('a1', 'sdata2')
+            self.set_dac('wbc', wbc)
+            self.api.daqTriggerSource('extern')
+        self.PBar.start(t * 600 if n is None else n)
+        data = []
+        self.daq_start()
+        t_start = time()
+        while time() - t_start < t * 60 if n is None else len(data) < n:
+            sleep(.1)
+            self.PBar.update(int((time() - t_start) * 10) if n is None else len(data))
+            self.daq_trigger(10000) if random_trig else do_nothing()
+            try:
+                self.set_dac('wbc', wbc)  # resets the ROC ... lazy solution
+                while True:
+                    data.append(self.api.daqGetEvent())
+            except RuntimeError:
+                pass
+        self.PBar.finish()
+        self.print_rate(time() - t_start, random_trig)
+        self.daq_stop()
+        self.api.HVoff()
+        self.set_pg()
+        return data
+
+    def print_rate(self, t, random_trig):
+        stats = self.api.getStatistics()
+        t = (2.5e-8 * stats.total_events / 8.) if random_trig else t
+        stats.dump()
+        print 'Event Rate: {0: 8.4f} kHz'.format(stats.valid_events / t / 1e3)
+        print 'Hit Rate:   {0: 8.4f} kHz'.format(stats.valid_pixels / t / 1e3)
+        print 'Trigger Eff {0: 8.4f} %'.format(100. * stats.valid_events / float(stats.total_events))
+
+    def get_event_data(self, n):
         data = []
         while len(data) < n:
             event = self.get_event()
