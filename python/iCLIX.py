@@ -325,7 +325,7 @@ class CLIX:
         if probe not in probes or signal not in signals:
             print 'wrong probe or signal'
             return
-        self.api.SignalProbe(probe, signal)
+        return self.api.SignalProbe(probe, signal)
 
     def set_clock(self, value):
         """sets all the delays to the right value if you want to change clk"""
@@ -556,10 +556,7 @@ class CLIX:
         self.plot_graph(h, draw_opt='')
 
     def clear_buffer(self):
-        try:
-            self.api.daqGetEventBuffer()
-        except RuntimeError:
-            pass
+        self.api.daqClear()
 
     def wbc_scan(self, min_wbc=97, max_triggers=50, max_wbc=130, plot=False):
         """do_wbcScan [minimal WBC] [number of events] [maximal WBC]: \n
@@ -581,10 +578,11 @@ class CLIX:
         for wbc in xrange(min_wbc, max_wbc):  # loop over wbc
             self.clear_buffer()
             self.api.setDAC('wbc', wbc)
-            for event in self.get_data(max_triggers):
-                trigger_phases[event.triggerPhases[0]] += 1
-                for roc in set([pix.roc for pix in event.pixels]):
-                    yields[wbc][roc] += 100. / max_triggers
+            for event in self.get_event_data(max_triggers):
+                if len(event.triggerPhases):
+                    trigger_phases[event.triggerPhases[0]] += 1
+                    for roc in set([pix.roc for pix in event.pixels]):
+                        yields[wbc][roc] += 100. / max_triggers
             print '  {:03d}\t{}'.format(wbc, '\t'.join(['{:5.1f}%'.format(v) for v in yields[wbc]]))
 
             # stopping criterion
@@ -624,36 +622,8 @@ class CLIX:
             mg.GetXaxis().SetTitle('WBC')
             mg.GetYaxis().SetTitle('Yield [%]')
 
-    def hitmap(self, t=1, random_trigger=1, n=10000, wbc=123):
-        self.api.HVon()
-        t_start = time()
-        if random_trigger:
-            self.set_pg(cal=False, res=False, delay=20)
-        else:
-            self.signal_probe('a1', 'sdata2')
-            self.set_dac('wbc', wbc)
-            self.api.daqTriggerSource('extern')
-        self.api.daqStart()
-        self.start_pbar(t * 600)
-        data = []
-        while time() - t_start < t * 60:
-            self.ProgressBar.update(int((time() - t_start) * 10) + 1)
-            if random_trigger:
-                self.api.daqTrigger(n, 500)
-            try:
-                if random_trigger:
-                    sleep(.5)
-                    data += self.api.daqGetEventBuffer()
-                else:
-                    data += [self.api.daqGetEvent()]
-            except RuntimeError:
-                pass
-            except MemoryError:
-                break
-        self.ProgressBar.finish()
-        self.api.daqStop()
-        self.api.HVoff()
-        self.set_pg()
+    def hitmap(self, t=1, wbc=93, n=None, random_trigger=False):
+        data = self.get_data(wbc, t, n, random_trigger)
         pix_data = [pix for event in data for pix in event.pixels]
         h = TH1I('h', 'h', 512, -256, 256)
         for pix in pix_data:
@@ -661,18 +631,12 @@ class CLIX:
         print 'Entries:', h.GetEntries
         self.Plotter.plot_histo(h, draw_opt='hist')
         self.plot_map(pix_data, 'Hit Map', count=True, no_stats=True)
-        stats = self.api.getStatistics()
-        event_rate = stats.valid_events / (2.5e-8 * stats.total_events / 8.)
-        hit_rate = stats.valid_pixels / (2.5e-8 * stats.total_events / 8.)
-        stats.dump
-        print 'Event Rate: {0:5.4f} MHz'.format(event_rate / 1000000)
-        print 'Hit Rate:   {0:5.4f} MHz'.format(hit_rate / 1000000)
 
-    def hitmap_random(self, t, n=10000, wbc=123):
+    def hitmap_random(self, t, n=10000):
         return self.hitmap(t, random_trigger=True, n=n)
 
     def hitmap_trigger(self, t, wbc=123):
-        return self.hitmap(t, random_trigger=False, wbc=wbc)
+        return self.hitmap(t, wbc, random_trigger=False)
 
     def load_mask(self, file_name):
         f = open(file_name, 'r')
@@ -740,31 +704,11 @@ class CLIX:
         w.convert()
         self.api.HVoff()
 
-    def save_hdf5(self, t=1, random=False):
+    def save_hdf5(self, t=1, n=None, random=False):
         w = HDF5Writer('main')
-        self.api.HVon()
         self.enable_all()
-        if random:
-            self.set_pg(cal=False, res=False, delay=20)
-        else:
-            self.trigger_source('extern')
-            self.set_dac('wbc', w.WBC)
-        self.daq_start()
-        t_start = time()
-        w.PBar.start(t * 600)
-        while time() - t_start < t * 60:
-            w.PBar.update(int((time() - t_start) * 10))
-            sleep(.1)
-            self.daq_trigger(10000) if random else sleep(.4)
-            try:
-                for event in self.api.daqGetEventBuffer():
-                    w.add_event(event)
-            except RuntimeError:
-                sleep(.5)
-        w.PBar.finish()
-        self.daq_stop()
+        w.add_data(self.get_data(w.WBC, t, n, random))
         w.convert()
-        self.api.HVoff()
 
     def save_data(self, n=240000):
         global BREAK
