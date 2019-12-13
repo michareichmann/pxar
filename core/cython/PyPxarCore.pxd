@@ -232,6 +232,8 @@ cdef extern from "api.h" namespace "pxar":
         void setTestboardDelays(vector[pair[string, uint8_t] ] sig_delays) except +
         void setPatternGenerator(vector[pair[string, uint8_t] ] pg_setup) except +
         void setDecodingOffset(uint8_t offset)
+        void setDecodingL1Offset(vector[float])
+        void setDecodingAlphas(vector[float])
         void setDecodingThresholds(vector[vector[float]])
 
         bool initDUT(vector[uint8_t] hubId,

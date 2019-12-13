@@ -343,6 +343,16 @@ cdef class PyPxarCore:
     def setDecodingOffset(self, offset):
         cdef uint8_t os = offset
         self.thisptr.setDecodingOffset(os)
+    def setDecodingL1Offset(self, lst):
+        cdef vector[float] offsets
+        for offset in lst:
+            offsets.push_back(offset)
+        self.thisptr.setDecodingL1Offset(offsets)
+    def setDecodingAlphas(self, lst):
+        cdef vector[float] alphas
+        for alpha in lst:
+            alphas.push_back(alpha)
+        self.thisptr.setDecodingL1Offset(alphas)
     def setDecodingThresholds(self, thresholds):
         cdef vector[vector[float]] th
         for i, lst in enumerate(thresholds):
