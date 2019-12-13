@@ -24,6 +24,7 @@ pxar_dir = dirname(dirname(realpath(__file__)))
 path.insert(1, join(pxar_dir, 'lib'))
 path.insert(1, join(pxar_dir, 'python', 'src'))
 
+from draw import *
 from ROOT import TCanvas, TCutG, gStyle, TColor, TMultiGraph, TH1I, TSpectrum
 from argparse import ArgumentParser
 from numpy import mean, delete, arange
@@ -34,7 +35,6 @@ from pxar_plotter import Plotter
 from TreeWriterLjubljana import TreeWriterLjubljana
 from hdf5_writer import HDF5Writer
 from json import dumps
-from draw import *
 
 dacdict = PyRegisterDictionary()
 probedict = PyProbeDictionary()
@@ -846,10 +846,10 @@ if __name__ == '__main__':
     # command line argument parsing
 
     parser = ArgumentParser(prog=prog_name, description="A Simple Command Line Interface to the pxar API.")
-    parser.add_argument('dir', metavar="DIR", help="The digit rectory with all required config files.", nargs='?', default='.')
+    parser.add_argument('dir', metavar="DIR", help="The data directory with all required config files. [default = . ]", nargs='?', default='.')
     parser.add_argument('--run', '-r', metavar="FILE", help="Load a cmdline script to be executed before entering the prompt.", default='')
     parser.add_argument('--verbosity', '-v', metavar="LEVEL", default="INFO", help="The output verbosity set in the pxar API.")
-    parser.add_argument('--trim', '-T', nargs='?', default=None, help="The output verbosity set in the pxar API.")
+    parser.add_argument('--trim', '-T', nargs='?', default=None, help="The output verbosity set in the pxar API. [default = None]")
     parser.add_argument('-wbc', action='store_true')
     args = parser.parse_args(argv)
 
