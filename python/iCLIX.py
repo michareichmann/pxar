@@ -236,6 +236,13 @@ class CLIX:
         except RuntimeError:
             return
 
+    def update_time(self, t_start, t_max, n, n_max):
+        t = time() - t_start
+        if t - self.PBar.LastUpdate > .1:
+            self.PBar.update(int(t * 10) if n_max is None else n)
+            self.PBar.LastUpdate = t
+        return t < t_max * 60 if n_max is None else n < n_max
+
     def get_data(self, wbc, t, n=None, random_trig=False):
         self.api.HVon()
         if random_trig:
@@ -248,14 +255,12 @@ class CLIX:
         data = []
         self.daq_start()
         t_start = time()
-        # todo write update time method
         while time() - t_start < t * 60 if n is None else len(data) < n:
             sleep(.01)
-            self.PBar.update(int((time() - t_start) * 10) if n is None else len(data))
             self.daq_trigger(10000) if random_trig else do_nothing()
             try:
                 self.set_dac('wbc', wbc)  # resets the ROC ... lazy solution
-                while True and (time() - t_start < t * 60 if n is None else len(data) < n):
+                while self.update_time(t_start, t, len(data), n):
                     data.append(self.api.daqGetEvent())
             except RuntimeError:
                 pass

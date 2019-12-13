@@ -146,6 +146,7 @@ class PBar:
     def __init__(self):
         self.PBar = None
         self.Widgets = ['Progress: ', Percentage(), ' ', Bar(marker='>'), ' ', ETA(), ' ', FileTransferSpeed()]
+        self.LastUpdate = 0
 
     def start(self, n):
         self.PBar = ProgressBar(widgets=self.Widgets, maxval=n).start()
