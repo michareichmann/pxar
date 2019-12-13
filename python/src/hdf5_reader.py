@@ -119,4 +119,4 @@ if __name__ == '__main__':
     aparser.add_argument('-c', '--config', nargs='?', default='main', help='name of the ini config file (without .ini) [default = main]')
     pargs = aparser.parse_args()
 
-    z = HDF5Reader(pargs.run, config=pargs.config)
+    z = HDF5Reader(pargs.run, config_name=pargs.config)

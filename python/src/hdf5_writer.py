@@ -45,8 +45,11 @@ class HDF5Writer(FileWriter):
                     grp.create_dataset('n_clusters', data=self.NClusters[roc])
 
     def add_data(self, data):
-        for event in data:
+        info('adding data ... ')
+        self.PBar.start(len(data))
+        for i, event in enumerate(data):
             self.add_event(event)
+            self.PBar.update(i)
 
     def add_event(self, event):
         if not event.pixels:
