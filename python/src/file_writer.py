@@ -25,8 +25,7 @@ class FileWriter:
         self.WBC = self.Config.getint('CHIP', 'wbc')
         self.NCols = self.Config.getint('CHIP', 'columns')
         self.NRows = self.Config.getint('CHIP', 'rows')
-        self.Trim = self.Config.get('CHIP', 'trim', 1, {'trim': ''})
-
+        self.Trim = self.Config.get('CHIP', 'trim') if self.Config.has_option('CHIP', 'trim') else ''
         self.NEvents = 0
 
         # Pulse Height Calibrations
@@ -46,10 +45,13 @@ class FileWriter:
         split_at = arange(self.NRows, self.NCols * self.NRows, self.NRows)  # split at every new column (after n_rows)
         lst = array([split(genfromtxt(filename, skip_header=3, usecols=arange(4)), split_at) for filename in glob('phCalibrationFitErr{}*'.format(self.Trim))])
         if not lst.size or not lst[0].size:
-            critical('Did not find calibration file!')
+            warning('Did not find calibration file for trim {}! '.format(self.Trim))
+            return
         return lst
 
     def get_vcal(self, roc, col, row, adc):
+        if self.Parameters is None:
+            return adc
         self.Fit.SetParameters(*self.Parameters[roc][col][row])
         return self.Fit.GetX(adc)
 
