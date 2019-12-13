@@ -28,32 +28,33 @@ class HDF5Reader(FileReader):
 
     def __del__(self):
         self.File.close()
+
+    def load_file(self):
+        return h5py.File(join(self.DataDir, self.FileName))
         
-    def load_fid_cut(self):
-        x, y = self.Data['clusters']['column'], self.Data['clusters']['row']
+    def load_fid_cut(self, cluster=True):
+        key = 'clusters' if cluster else 'hits'
+        x, y = self.Data[key]['column'], self.Data[key]['row']
         return where((x >= self.Fid[0]) & (x <= self.Fid[1]) & (y >= self.Fid[2]) & (y <= self.Fid[3]))[0] if self.Fid else None
 
     def get_vcal_values(self, use_fid=True):
         return self.Data['clusters']['vcal'] if not use_fid or not self.Fid else self.Data['clusters']['vcal'][self.FidCut]
     
-    def get_x(self, use_fid=True):
-        return self.Data['clusters']['column'] if not use_fid or not self.Fid else self.Data['clusters']['column'][self.FidCut]
+    def get_x(self, use_fid=True, cluster=True):
+        key = 'clusters' if cluster else 'hits'
+        return self.Data[key]['column'] if not use_fid or not self.Fid else self.Data[key]['column'][self.load_fid_cut(cluster)]
 
-    def get_y(self, use_fid=True):
-        return self.Data['clusters']['row'] if not use_fid or not self.Fid else self.Data['clusters']['row'][self.FidCut]
-
-    def load_file(self):
-        return h5py.File(join(self.DataDir, self.FileName))
+    def get_y(self, use_fid=True, cluster=True):
+        key = 'clusters' if cluster else 'hits'
+        return self.Data[key]['row'] if not use_fid or not self.Fid else self.Data[key]['row'][self.load_fid_cut(cluster)]
 
     def draw_hitmap(self, cluster=False, vcal=None, fid=False):
         h = TH2I('hhm{}'.format(cluster), '{} Map'.format('Cluster' if cluster else 'Hit'), *self.Bins)
-        if cluster:
-            x = self.get_x(fid) if vcal is None else self.get_x(fid)[where(self.get_vcal_values(fid) < vcal)]
-            y = self.get_y(fid) if vcal is None else self.get_y(fid)[where(self.get_vcal_values(fid) < vcal)]
-            h.FillN(x.size, x.astype('d'), y.astype('d'), full(x.size, 1, 'd'))
-        else:
-            h.FillN(self.NClusters, self.Data['clusters']['column'].astype('d'), self.Data['clusters']['row'].astype('d'), full(self.NHits, 1, 'd'))
-        format_histo(h, x_tit='column', y_tit='row', y_off=1.2, z_tit='Number of Entries', z_off=1.6, stats=0)
+        x = self.get_x(fid, cluster) if vcal is None else self.get_x(fid, cluster)[where(self.get_vcal_values(fid) < vcal)]
+        y = self.get_y(fid, cluster) if vcal is None else self.get_y(fid, cluster)[where(self.get_vcal_values(fid) < vcal)]
+        h.FillN(x.size, x.astype('d'), y.astype('d'), full(x.size, 1, 'd'))
+        format_histo(h, x_tit='column', y_tit='row', y_off=1.2, z_tit='Number of Entries', z_off=1.6)
+        self.Plotter.format_statbox(entries=True, x=.8)
         self.Plotter.draw_histo(h, lm=.13, rm=.18, draw_opt='colz', x=1.17)
 
     def draw_cluster_map(self, vcal=None, fid=False):
