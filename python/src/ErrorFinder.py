@@ -4,7 +4,8 @@
 # created on February 20th 2017 by M. Reichmann (remichae@phys.ethz.ch)
 # --------------------------------------------------------
 
-from ROOT import TCanvas, TCutG, gStyle, TColor, TH2F, TF2
+from draw import *
+from ROOT import TCanvas, TCutG, TH2F, TF2
 from argparse import ArgumentParser
 from numpy import zeros, array
 from os.path import basename, dirname, realpath, split, join
@@ -46,7 +47,7 @@ class ErrorFinder:
         self.ProgressBar = None
         self.NRows = 80
         self.NCols = 52
-        set_palette()
+        set_palette(custom=True)
 
     def restart_api(self):
         self.api = None
@@ -131,7 +132,7 @@ class ErrorFinder:
 
     def find_errors(self, t=1, n=10000, show=True):
         self.start_xray()
-        set_palette(False)
+        set_palette()
         self.api.HVon()
         t_start = time()
         self.set_pg(cal=False, res=False)
@@ -193,19 +194,6 @@ class ErrorFinder:
     def stop_xray(self):
         self.start_xray(False)
 
-
-def set_palette(custom=True, pal=1):
-    if custom:
-        stops = array([0., .5, 1], 'd')
-        green = array([0. / 255., 200. / 255., 80. / 255.], 'd')
-        blue = array([0. / 255., 0. / 255., 0. / 255.], 'd')
-        red = array([180. / 255., 200. / 255., 0. / 255.], 'd')
-        gStyle.SetNumberContours(20)
-        bla = TColor.CreateGradientColorTable(len(stops), stops, red, green, blue, 255)
-        color_table = array([bla + ij for ij in xrange(255)], 'i')
-        gStyle.SetPalette(len(color_table), color_table)
-    else:
-        gStyle.SetPalette(pal)
 
 if __name__ == '__main__':
     # command line argument parsing
