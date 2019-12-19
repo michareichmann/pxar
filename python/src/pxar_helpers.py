@@ -1,10 +1,8 @@
 #!/usr/bin/env python2
-"""
-Helper classes and functions useful when interfacing the pxar API with Python.
-"""
+""" Helper classes and functions useful when interfacing the pxar API with Python. """
 from PyPxarCore import Pixel, PixelConfig, PyPxarCore, PyRegisterDictionary, PyProbeDictionary, Statistics
 from functools import wraps # used in parameter verification decorator ("arity")
-import os # for file system cmds
+import os
 from os.path import join
 import sys
 import shlex
@@ -13,11 +11,13 @@ from datetime import datetime
 from ConfigParser import ConfigParser
 from json import loads
 from utils import info, critical
+from numpy import full
 
-# "arity": decorator used for parameter parsing/verification on each cmd function call
-# Usually, the cmd module only passes a single string ('line') with all parameters;
-# this decorator divides and verifies the types of each parameter.
+
 def arity(n, m, cs=[]): # n = min number of args, m = max number of args, cs = types
+    """ "arity": decorator used for parameter parsing/verification on each cmd function call
+        Usually, the cmd module only passes a single string ('line') with all parameters;
+        this decorator divides and verifies the types of each parameter."""
     def __temp1(f):
         @wraps(f) # makes sure the docstring of the orig. function is passed on
         def __temp2(self, text):
@@ -38,6 +38,7 @@ def arity(n, m, cs=[]): # n = min number of args, m = max number of args, cs = t
         return __temp2
     return __temp1
 
+
 def print_data(fullOutput,data,stepsize=1):
     for idac, dac in enumerate(data):
         s = "DAC " + str(idac*stepsize) + ": "
@@ -48,6 +49,7 @@ def print_data(fullOutput,data,stepsize=1):
             s += str(len(dac)) + " pixels"
         print s
 
+
 def get_possible_filename_completions(text):
     head, tail = os.path.split(text.strip())
     if head == "": #no head
@@ -55,9 +57,11 @@ def get_possible_filename_completions(text):
     files = os.listdir(head)
     return [ f for f in files if f.startswith(tail) ]
 
+
 def extract_full_argument(line, endidx):
     newstart = line.rfind(" ", 0, endidx)
     return line[newstart:endidx]
+
 
 class PxarConfigFile:
     """ class that loads the old-style config files of psi46expert """
@@ -73,10 +77,10 @@ class PxarConfigFile:
                     if len(parts) == 2:
                         self.config[parts[0].lower()] = parts[1]
                     elif len(parts) == 3:
-                        parts = [parts[0],' '.join(parts[1:])]
+                        parts = [parts[0], ' '.join(parts[1:])]
                         self.config[parts[0].lower()] = parts[1]
                     elif len(parts) == 4:
-                        parts = [parts[0],' '.join(parts[1:])]
+                        parts = [parts[0], ' '.join(parts[1:])]
                         if len(parts) == 2:
                             self.config[parts[0].lower()] = parts[1]
                     else:
@@ -84,10 +88,16 @@ class PxarConfigFile:
 
         finally:
             thisf.close()
+
     def show(self):
         print self.config
+
     def get(self, opt, default=None):
         return self.config.get(opt.lower(), default)
+
+    def get_roc_vector(self, opt, n, default=None):
+        value = self.get(opt, default)
+        return loads(value) if '[' in str(value) else full(n, float(value))
 
 class PxarParametersFile:
     """ class that loads the old-style parameters files of psi46expert """
@@ -114,6 +124,7 @@ class PxarParametersFile:
             return self.config[opt.lower()]
     def getAll(self):
         return self.config
+
 
 class PxarMaskFile:
     """ class that loads the mask files of pxarGUI """
@@ -154,10 +165,13 @@ class PxarMaskFile:
                                 self.config.append(p)
         finally:
             thisf.close()
+
     def show(self):
         print self.config
+
     def get(self):
         return self.config
+
 
 class PxarTrimFile:
     """ class that loads the old-style trim parameters files of psi46expert """
@@ -180,13 +194,16 @@ class PxarTrimFile:
                         self.config.append(p)
         finally:
             thisf.close()
+
     def show(self):
         print self.config
+
     def get(self, opt, default = None):
         if default:
             return self.config.get(opt.lower(),default)
         else:
             return self.config[opt.lower()]
+
     def getAll(self):
         return self.config
 
@@ -328,7 +345,7 @@ def PxarStartup(directory, verbosity, trim=None):
     pixels = list()
     for column in range(0, 52):
         for row in range(0, 80):
-            p = PixelConfig(column,row,15)
+            p = PixelConfig(column, row, 15)
             p.mask = False
             pixels.append(p)
 
@@ -367,45 +384,45 @@ def PxarStartup(directory, verbosity, trim=None):
     # Pattern Generator for single ROC operation:
     if int(config.get("nTbms")) == 0:
         pg_setup = (
-            ("PG_RESR",25),
-            ("PG_CAL",pgcal),
-            ("PG_TRG",16),
-            ("PG_TOK",0)
+            ("PG_RESR", 25),
+            ("PG_CAL", pgcal),
+            ("PG_TRG", 16),
+            ("PG_TOK", 0)
             )
     else:
         pg_setup = (
-            ("PG_RESR",15),
-            ("PG_CAL",pgcal),
-            ("PG_TRG",0))
-       # Start an API instance from the core pxar library
+            ("PG_RESR", 15),
+            ("PG_CAL", pgcal),
+            ("PG_TRG", 0))
+    # Start an API instance from the core pxar library
     try:
         api = PyPxarCore(usbId=config.get("testboardName"), logLevel=verbosity)
     except RuntimeError as e:
         critical(e)
         return
-    print api.getVersion()
-    if not api.initTestboard(pg_setup = pg_setup, power_settings = power_settings, sig_delays = tbparameters.getAll()):
+    info('Version: {}'.format(api.getVersion()))
+    if not api.initTestboard(pg_setup=pg_setup, power_settings=power_settings, sig_delays=tbparameters.getAll()):
         print "WARNING: could not init DTB -- possible firmware mismatch."
         print "Please check if a new FW version is available"
         exit()
 
     if not any(word in roc_type for word in ['dig', 'proc']):
-        print 'Analogue decodingOffset set to:', int(config.get("decodingOffset", 0))
-        api.setDecodingOffset(int(config.get("decodingOffset", int(0))))
-        api.setDecodingL1Offset(loads(config.get('decodingL1Offset', '[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]')))
-        api.setDecodingL1Offset(loads(config.get('decodingAlphas', '[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]')))
-    if roc_type == 'psi46v2' and 'analogueThresholds'.lower() in config.config:
-        thresholds = loads(config.get('analoguethresholds', [[]]))
-        api.setDecodingThresholds(thresholds)
-        info('Successfully initialised thresholds for {} ROCs'.format(len(thresholds)))
-    print "And we have just initialized " + str(len(pixels)) + " pixel configs to be used for every ROC!"
+        info('Analogue decodingOffset set to: {}'.format(config.get_roc_vector('decodingOffset', nrocs, 0)))
+        info('Analogue level1 offset set to: {}'.format(config.get_roc_vector('l1Offset', nrocs, 0)))
+        info('Analogue alphas set to: {}'.format(config.get_roc_vector('alphas', nrocs, 0)))
+        api.setDecodingOffsets(config.get_roc_vector('decodingOffset', nrocs, 0))
+        api.setDecodingL1Offsets(config.get_roc_vector('l1Offset', nrocs, 0))
+        api.setDecodingAlphas(config.get_roc_vector('alphas', nrocs, 0))
 
-    hubids = [int(i) for i in config.get("hubId",31).split(',')]
-    print 'HubIds set to:', hubids
-    api.initDUT(hubids, config.get("tbmType","tbm08"), tbmDACs,config.get("rocType"), rocDacs, rocPixels, rocI2C)
+    api.SignalProbe('a1', config.get('probeA1', 'sdata1'))
+    api.SignalProbe('a2', config.get('probeA2', 'sdata2'))
+    api.SignalProbe('d1', config.get('probeD1', 'clk'))
+    api.SignalProbe('d2', config.get('probeD2', 'ctr'))
 
+    hubids = [int(i) for i in config.get("hubId", 31).split(',')]
+    info('HubIds set to: {}'.format(hubids))
+    info('And we have just initialized {} pixel configs to be used for every ROC!'.format(len(pixels)))
+    api.initDUT(hubids, config.get("tbmType", "tbm08"), tbmDACs, config.get("rocType"), rocDacs, rocPixels, rocI2C)
     api.testAllPixels(True)
-    print "Now enabled all pixels"
-
-    print "pxar API is now started and configured."
+    info('pxar API is now started and configured.')
     return api
