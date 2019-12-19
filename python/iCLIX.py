@@ -8,24 +8,13 @@ from subprocess import call
 from sys import argv, path, stdout
 from os import _exit as terminate
 
-BREAK = False
-z = None
-import signal
-def signal_handler(signal, frame):
-    global BREAK, z
-    print("\nprogram exiting gracefully")
-    BREAK = True
-    terminate(5)
-
-signal.signal(signal.SIGINT, signal_handler)
-
 # add python and cython libs
 pxar_dir = dirname(dirname(realpath(__file__)))
 path.insert(1, join(pxar_dir, 'lib'))
 path.insert(1, join(pxar_dir, 'python', 'src'))
 
 from draw import *
-from ROOT import TCanvas, TCutG, gStyle, TColor, TMultiGraph, TH1I, TSpectrum
+from ROOT import TCanvas, TCutG, TMultiGraph, TH1I, TSpectrum
 from argparse import ArgumentParser
 from numpy import mean, delete, arange
 from numpy.random import randint
@@ -36,6 +25,18 @@ from TreeWriterLjubljana import TreeWriterLjubljana
 from hdf5_writer import HDF5Writer
 from json import dumps
 
+
+BREAK = False
+z = None
+import signal
+def signal_handler(signal, frame):
+    global BREAK, z
+    print("\nprogram exiting gracefully")
+    BREAK = True
+    terminate(5)
+
+
+signal.signal(signal.SIGINT, signal_handler)
 dacdict = PyRegisterDictionary()
 probedict = PyProbeDictionary()
 prog_name = basename(argv.pop(0))
@@ -59,10 +60,9 @@ class CLIX:
 
         self.window = None
         self.Plots = []
-        self.ProgressBar = None
         self.NRows = 80
         self.NCols = 52
-        set_palette()
+        set_palette(custom=True)
 
         self.Plotter = Plotter()
         self.Draw = Draw()
@@ -72,10 +72,8 @@ class CLIX:
         self.api = None
         self.api = PxarStartup(self.Dir, self.Verbosity, self.Trim)
 
-    def start_pbar(self, n):
-        self.ProgressBar = ProgressBar(widgets=['Progress: ', Percentage(), ' ', Bar(marker='>'), ' ', ETA(), ' ', FileTransferSpeed()], maxval=n)
-        self.ProgressBar.start()
-
+    # -----------------------------------------
+    # region HELPERS
     @staticmethod
     def run(filename):
         print '\nReading commands from file...\n'
@@ -181,6 +179,22 @@ class CLIX:
                 break
         return n_hits
 
+    def save_config(self, key, value):
+        f_name = join(self.Dir, 'configParameters.dat')
+        with open(f_name, 'r+') as f:
+            lines = f.readlines()
+            for i, line in enumerate(lines):
+                if key in line:
+                    lines[i] = '{} {}\n'.format(key, value)
+                    info('changing existing config setting of {} from {} to {}'.format(key, ' '.join(line.split()[1:]), value))
+            if not any(key in line for line in lines):
+                lines.append('{} {}'.format(key, value))
+                info('adding config setting {} with value {}'.format(key, value))
+            f.seek(0)
+            f.writelines(lines)
+    # endregion HELPERS
+    # -----------------------------------------
+
     # -----------------------------------------
     # region API
     def get_dac(self, dac, roc_id=0):
@@ -205,34 +219,30 @@ class CLIX:
 
     def get_n_rocs(self):
         return self.api.getNEnabledRocs()
-
-    def cycle_tb(self):
-        self.daq_start()
-        self.daq_stop()
-    # endregion
+    # endregion API
+    # -----------------------------------------
 
     # -----------------------------------------
     # region DAQ
+    def clear_buffer(self):
+        self.api.daqClear()
+
     def daq_start(self, arg=0):
         self.api.daqStart(arg)
 
     def daq_stop(self):
         self.api.daqStop()
 
+    def cycle_tb(self):
+        self.daq_start()
+        self.daq_stop()
+
     def daq_trigger(self, n_trig=1, period=500):
         self.api.daqTrigger(n_trig, period)
 
-    def daq_get_event(self, get=False):
-        try:
-            data = self.api.daqGetEvent()
-            print data
-        except RuntimeError:
-            pass
-
     def get_event(self):
         try:
-            data = self.api.daqGetEvent()
-            return data
+            return self.api.daqGetEvent()
         except RuntimeError:
             return
 
@@ -331,15 +341,15 @@ class CLIX:
                 i += self.decode_pixel(event[i+1:])
             i += 1
 
-    def signal_probe(self, probe=None, signal=None):
+    def signal_probe(self, probe=None, sig=None):
         probes = ['a1', 'a2', 'd1', 'd2']
         probe = raw_input('Enter the probe output {}: '.format(probes)) if probe is None else probe
         signals = self.ProbeDict.getAllAnalogNames() if probe.startswith('a') else self.ProbeDict.getAllDigitalNames()
-        signal = raw_input('Enter a signal from {}: '.format(signals)) if signal is None else signal
-        if probe not in probes or signal not in signals:
+        sig = raw_input('Enter a signal from {}: '.format(signals)) if sig is None else sig
+        if probe not in probes or sig not in signals:
             print 'wrong probe or signal'
             return
-        return self.api.SignalProbe(probe, signal)
+        return self.api.SignalProbe(probe, sig)
 
     def set_clock(self, value):
         """sets all the delays to the right value if you want to change clk"""
@@ -380,7 +390,7 @@ class CLIX:
             print 'DAQ returns faulty state.'
 
     def trigger_loop(self, on='True', freq=100):
-        """start\stop trigger loop: [on] [frequency]"""
+        """start/stop trigger loop: [on] [frequency]"""
         on = False if str(on).lower() in ['0', 'false', 'stop', 'end'] else True
         self.api.daqTriggerSource('periodic' if on else 'pg_dir', 40000000 / float(freq) if on else 0)
         self.daq_start()
@@ -401,7 +411,8 @@ class CLIX:
         except IndexError:
             return
 
-    # endregion
+    # endregion DAQ
+    # -----------------------------------------
 
     # -----------------------------------------
     # region MASK // ENABLE
@@ -568,9 +579,6 @@ class CLIX:
         for adc in adcs:
             h.Fill(adc)
         self.plot_graph(h, draw_opt='')
-
-    def clear_buffer(self):
-        self.api.daqClear()
 
     def wbc_scan(self, min_wbc=97, max_triggers=50, max_wbc=130, plot=False):
         """do_wbcScan [minimal WBC] [number of events] [maximal WBC]: \n
@@ -764,13 +772,25 @@ class CLIX:
     def find_tb_delays(self):
         """findAnalogueTBDelays: configures tindelay and toutdelay"""
         self.api.setTestboardDelays({'tindelay': 0, 'toutdelay': 20})
+        self.enable_all()
         self.api.maskAllPixels(1)
         data = self.get_raw_event()
         tin = data.index(min(data))
         tout = 20 - (len(data) - tin - 3 * self.api.getNRocs())
         self.api.setTestboardDelays({'tindelay': tin, 'toutdelay': tout})
-        print 'set tindelay to:  ', tin
-        print 'set toutdelay to: ', tout
+        info('set tindelay to:  {:2d}'.format(tin))
+        info('set toutdelay to: {:2d}'.format(tout))
+
+    def find_offsets(self, n_trig=1000):
+        d_off, l1_off = [], []
+        self.enable_single_pixel(15, 59)
+        self.send_triggers(n_trig)
+        data = self.get_raw_buffer()
+        for roc in xrange(self.get_n_rocs()):
+            l1_off.append(mean(data[:, (3 + 9 * roc):(8 + 9 * roc)]))
+            d_off.append(l1_off[roc] - mean(data[:, 1 + 9 * roc]))
+        self.save_config('l1Offset', '[{}]'.format(', '.join('{:1.1f}'.format(v) for v in l1_off)))
+        self.save_config('decodingOffset',  '[{}]'.format(', '.join('{:1.1f}'.format(v) for v in d_off)))
 
     def find_clk_delay(self, min_val=0, max_val=25, n_triggers=1000):
         """find the best clock delay setting """
@@ -781,7 +801,7 @@ class CLIX:
         best_black, best_level = [], []
 
         print 'scanning the clk delays ...'
-        self.start_pbar(self.get_n_rocs() * (max_val - min_val))
+        self.PBar.start(self.get_n_rocs() * (max_val - min_val))
         set_root_output(False)
         for roc in xrange(self.get_n_rocs()):
             black_spreads = []
@@ -804,18 +824,18 @@ class CLIX:
                 else:
                     spread = 99
                 level_spreads.append(spread)
-                self.ProgressBar.update(roc * (max_val - min_val) + clk - min_val)
+                self.PBar.update(roc * (max_val - min_val) + clk - min_val)
             best_black.append(range(min_val, max_val)[black_spreads.index(min(black_spreads))])
             best_level.append(range(min_val, max_val)[level_spreads.index(min(level_spreads))])
-        self.ProgressBar.finish()
         set_root_output(True)
         for roc, (b, lvl) in enumerate(zip(best_black, best_level)):
             print 'ROC {}: clk for lowest black spread: {}'.format(roc, b)
             print 'ROC {}: clk for lowest level spread: {}'.format(roc, lvl)
 
-    def draw_address_levels(self, n_trigger=1000):
+    def draw_address_levels(self, n_trigger=1000, show=True):
         h = self.get_address_levels(n_trigger)
-        self.Plotter.plot_histo(h)
+        format_histo(h, x_tit='Level [adc]', y_tit='Number of Entries', y_off=1.5)
+        self.Draw.draw_histo(h, show=show, lm=.12)
         return h
 
     def s_curve(self, col=14, row=14, ntrig=1000):
@@ -825,21 +845,6 @@ class CLIX:
         g = self.Draw.make_tgrapherrors('gsc', 'S-Curve for Pixel {} {}'.format(col, row), x=arange(256), y=efficiencies)
         format_histo(g, x_tit='VCAL', y_tit='Efficiency [%]', y_off=1.3)
         self.Draw.draw_histo(g, draw_opt='ap', lm=.12)
-
-
-
-def set_palette(custom=True, pal=1):
-    if custom:
-        stops = array([0., .5, 1], 'd')
-        green = array([0. / 255., 200. / 255., 80. / 255.], 'd')
-        blue = array([0. / 255., 0. / 255., 0. / 255.], 'd')
-        red = array([180. / 255., 200. / 255., 0. / 255.], 'd')
-        gStyle.SetNumberContours(20)
-        bla = TColor.CreateGradientColorTable(len(stops), stops, red, green, blue, 255)
-        color_table = array([bla + ij for ij in xrange(255)], 'i')
-        gStyle.SetPalette(len(color_table), color_table)
-    else:
-        gStyle.SetPalette(pal)
 
 
 if __name__ == '__main__':
@@ -875,7 +880,7 @@ if __name__ == '__main__':
     ge = z.get_efficiency_map
     ds = z.daq_start
     st = z.daq_stop
-    ev = z.daq_get_event
+    ev = z.get_event
     raw = z.daq_get_raw_event
     dt = z.daq_trigger
     # sd = z.api.setDAC

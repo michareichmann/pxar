@@ -9,7 +9,6 @@ class Plotter(object):
     def __init__(self):
         self.Plots = []
 
-
     def plot_histo(self, h, draw_opt='', lm=None, rm=None, l=None):
         c = TCanvas('c{n}'.format(n=h.GetName()), 'c', 1000, 1000)
         lm = c.GetLeftMargin() if lm is None else lm
