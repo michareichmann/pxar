@@ -789,6 +789,8 @@ class CLIX:
         for roc in xrange(self.get_n_rocs()):
             l1_off.append(mean(data[:, (3 + 9 * roc):(8 + 9 * roc)]))
             d_off.append(l1_off[roc] - mean(data[:, 1 + 9 * roc]))
+        self.api.setDecodingL1Offsets(l1_off)
+        self.api.setDecodingOffsets(d_off)
         self.save_config('l1Offset', '[{}]'.format(', '.join('{:1.1f}'.format(v) for v in l1_off)))
         self.save_config('decodingOffset',  '[{}]'.format(', '.join('{:1.1f}'.format(v) for v in d_off)))
 
