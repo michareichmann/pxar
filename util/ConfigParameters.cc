@@ -78,7 +78,7 @@ void ConfigParameters::initialize() {
   fProbeA2 = "sdata2";
   fProbeD1 = "clk";
   fProbeD2 = "ctr";
-  fDecodingOffsets.resize(fnRocs);
+  fBlackOffsets.resize(fnRocs);
   fL1Offsets.resize(fnRocs);
   fAlphas.resize(fnRocs);
 
@@ -1313,8 +1313,8 @@ void ConfigParameters::readDecodingOffsets(const std::string & value) {
 
   vector<float> values = stringToVector(value, float(0));
   vector<float> tmp(fnRocs, values.front());
-  fDecodingOffsets = values.size() == fnRocs ? values : tmp;
-  LOG(logINFO) << "Successfully read decoding offsets: " << vectorToString(fDecodingOffsets);
+  fBlackOffsets = values.size() == fnRocs ? values : tmp;
+  LOG(logINFO) << "Successfully read decoding offsets: " << vectorToString(fBlackOffsets);
 }
 
 void ConfigParameters::readL1Offsets(const std::string & value) {

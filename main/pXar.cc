@@ -195,7 +195,7 @@ int main(int argc, char *argv[]){
     api->SignalProbe("d1", configParameters->getProbe("d1"));
     api->SignalProbe("d2", configParameters->getProbe("d2"));
 
-    api->setDecodingOffsets(configParameters->getDecodingOffsets());
+    api->setBlackOffsets(configParameters->getBlackOffsets());
     api->setDecodingL1Offsets(configParameters->getDecodingL1Offsets());
     api->setDecodingAlphas(configParameters->getDecodingAlphas());
 

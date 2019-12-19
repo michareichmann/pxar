@@ -104,7 +104,7 @@ public:
   std::vector<uint8_t> getI2cAddresses() {return fI2cAddresses;}
   std::vector<float> getDecodingL1Offsets() { return fL1Offsets;}
   std::vector<float> getDecodingAlphas() { return fAlphas;}
-  std::vector<float> getDecodingOffsets() { return fDecodingOffsets; }
+  std::vector<float> getBlackOffsets() { return fBlackOffsets; }
 
   bool setTbParameter(std::string, uint8_t, bool appendIfNotFound = false);
   bool setTbPowerSettings(std::string, double);
@@ -190,7 +190,7 @@ private:
   std::string fTBName;
   bool fHvOn, fTbmEnable, fTbmEmulator, fKeithleyRemote, fGuiMode;
   std::string fProbeA1, fProbeA2, fProbeD1, fProbeD2;
-  std::vector<float> fDecodingOffsets;
+  std::vector<float> fBlackOffsets;
   std::vector<float> fL1Offsets;
   std::vector<float> fAlphas;
 

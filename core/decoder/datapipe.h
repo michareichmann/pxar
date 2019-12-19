@@ -244,7 +244,7 @@ namespace pxar {
     }
   };
     void Clear() { decodingStats.clear(); readback.clear(); count.clear(); shiftReg.clear(); eventID = -1; };
-    void setOffset(std::vector<float> decodingOffsetVec) {offsetB.clear(); for(unsigned int roc_i = 0; roc_i < decodingOffsetVec.size(); roc_i++) offsetB.push_back(float(decodingOffsetVec[roc_i]));}
+    void setBlackOffsets(std::vector<float> decodingOffsetVec) {offsetB.clear(); for(unsigned int roc_i = 0; roc_i < decodingOffsetVec.size(); roc_i++) offsetB.push_back(float(decodingOffsetVec[roc_i]));}
     void setLevel1s(std::vector<float> level1sVec) {level1s.clear(); for(unsigned int roc_i = 0; roc_i < level1sVec.size(); roc_i++) level1s.push_back(float(level1sVec[roc_i]));}
     void setAlphas(std::vector<float> alphasVec) {timeCompensator.clear(); for(unsigned int roc_i = 0; roc_i < alphasVec.size(); roc_i++) timeCompensator.push_back(float(alphasVec[roc_i]));}
     void setLevelSUser(std::vector<float> levelSUserVec) {levelSUser.clear(); for(size_t it = 0; it < levelSUserVec.size(); it++) levelSUserVec.push_back(float(levelSUserVec[it]));}

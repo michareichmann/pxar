@@ -407,10 +407,10 @@ def PxarStartup(directory, verbosity, trim=None):
         exit()
 
     if not any(word in roc_type for word in ['dig', 'proc']):
-        info('Analogue decodingOffset set to: {}'.format(config.get_roc_vector('decodingOffset', nrocs, 0)))
+        info('Analogue decodingOffset set to: {}'.format(config.get_roc_vector('blackOffset', nrocs, 0)))
         info('Analogue level1 offset set to: {}'.format(config.get_roc_vector('l1Offset', nrocs, 0)))
         info('Analogue alphas set to: {}'.format(config.get_roc_vector('alphas', nrocs, 0)))
-        api.setDecodingOffsets(config.get_roc_vector('decodingOffset', nrocs, 0))
+        api.setBlackOffsets(config.get_roc_vector('blackOffset', nrocs, 0))
         api.setDecodingL1Offsets(config.get_roc_vector('l1Offset', nrocs, 0))
         api.setDecodingAlphas(config.get_roc_vector('alphas', nrocs, 0))
 

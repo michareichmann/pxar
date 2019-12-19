@@ -90,7 +90,7 @@ void pxarCore::setTestboardDelays(std::vector<std::pair<std::string,uint8_t> > s
   LOG(logDEBUGAPI) << "Testboard signal delays updated.";
 }
 
-void pxarCore::setDecodingOffsets(std::vector<float> offsetv) { _hal->setOffset(offsetv); }
+void pxarCore::setBlackOffsets(std::vector<float> offsetv) { _hal->setBlackOffsets(offsetv); }
 void pxarCore::setDecodingL1Offsets(std::vector<float> offsetl1v){ _hal->setLevel1s(offsetl1v);}
 void pxarCore::setDecodingAlphas(std::vector<float> alphas){ _hal->setAlphas(alphas);}
 

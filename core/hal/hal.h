@@ -432,7 +432,7 @@ namespace pxar {
      */
     uint16_t GetADC(uint8_t rpc_par1);
 
-    void setOffset(std::vector<float> offsetDecv) { m_decoder[0].setOffset(offsetDecv); }
+    void setBlackOffsets(std::vector<float> offsetDecv) { m_decoder[0].setBlackOffsets(offsetDecv); }
     void setLevel1s(std::vector<float> levels1) {m_decoder[0].setLevel1s(levels1);}
     void setAlphas(std::vector<float> alphas) {m_decoder[0].setAlphas(alphas);}
 

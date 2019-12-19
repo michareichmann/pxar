@@ -340,11 +340,11 @@ cdef class PyPxarCore:
         for key, value in power_settings.items():
             ps.push_back((key,float(value)))
         self.thisptr.setTestboardPower(ps)
-    def setDecodingOffsets(self, values):
+    def setBlackOffsets(self, values):
         cdef vector[float] offsets
         for offset in values:
             offsets.push_back(offset)
-        self.thisptr.setDecodingOffsets(offsets)
+        self.thisptr.setBlackOffsets(offsets)
     def setDecodingL1Offsets(self, values):
         cdef vector[float] offsets
         for offset in values:

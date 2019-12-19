@@ -272,7 +272,7 @@ namespace pxar {
      *  In case of USB communication problems, pxar::UsbConnectionError is thrown.
      */
 
-    void setDecodingOffsets(std::vector<float> offsetV);
+    void setBlackOffsets(std::vector<float> offsetv);
     void setDecodingL1Offsets(std::vector<float> offsetV);
     void setDecodingAlphas(std::vector<float> offsetV);
 

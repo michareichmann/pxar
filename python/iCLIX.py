@@ -790,9 +790,10 @@ class CLIX:
             l1_off.append(mean(data[:, (3 + 9 * roc):(8 + 9 * roc)]))
             d_off.append(l1_off[roc] - mean(data[:, 1 + 9 * roc]))
         self.api.setDecodingL1Offsets(l1_off)
-        self.api.setDecodingOffsets(d_off)
+        self.api.setBlackOffsets(d_off)
         self.save_config('l1Offset', '[{}]'.format(', '.join('{:1.1f}'.format(v) for v in l1_off)))
-        self.save_config('decodingOffset',  '[{}]'.format(', '.join('{:1.1f}'.format(v) for v in d_off)))
+        self.save_config('blackOffset',  '[{}]'.format(', '.join('{:1.1f}'.format(v) for v in d_off)))
+        self.enable_all()
 
     def find_clk_delay(self, min_val=0, max_val=25, n_triggers=1000):
         """find the best clock delay setting """
