@@ -229,5 +229,49 @@ namespace pxar {
     return os.str();
   }
 
+  static std::string trimStr(const std::string & s, const std::string & trim_characters="\t\n\r\v []") {
+
+    size_t b = s.find_first_not_of(trim_characters);
+    size_t e = s.find_last_not_of(trim_characters);
+    if (b == std::string::npos || e == std::string::npos) {
+      return "";
+    }
+    return std::string(s, b, e - b + 1);
+  }
+
+  static std::vector<std::string> splitStr(std::string s, const std::string & delim=" ", bool dotrim=false) {
+
+    std::vector<std::string> result;
+    if (s.empty()) return result;
+    size_t i;
+    while ((i = s.find_first_of(delim)) != std::string::npos) {
+      result.push_back(dotrim ? trimStr(s.substr(0, i)) : s.substr(0, i));
+      s = s.substr(i + 1);
+    }
+    result.push_back(s);
+    return result;
+  }
+
+  template <typename Q>
+  static std::string vectorToString(std::vector<Q> vec) {
+    std::stringstream ss;
+    ss << "[";
+    for (typename std::vector<Q>::iterator i = vec.begin(); i != vec.end() - 1; i++)
+      ss << (sizeof(*i) < 2 ? int(*i) : *i) << ", ";
+    ss << (sizeof(vec.back()) < 2 ? int(vec.back()) : vec.back()) << "]";
+    return ss.str();
+  }
+
+  template <typename Q>
+  static std::vector<Q> stringToVector(std::string in, Q=int(0)){
+
+    std::vector<Q> tmp;
+    in = in.substr(in.find('[') + 1, in.find(']') - in.find('[') - 1);
+    std::vector<std::string> vec_strings = splitStr(in, ",");
+    for (size_t i(0); i < vec_strings.size(); i++)
+      tmp.push_back(static_cast<Q>(std::atof(vec_strings.at(i).c_str())));
+    return tmp;
+  }
+
 }
 #endif
