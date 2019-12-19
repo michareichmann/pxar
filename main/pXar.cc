@@ -195,14 +195,12 @@ int main(int argc, char *argv[]){
     api->SignalProbe("d1", configParameters->getProbe("d1"));
     api->SignalProbe("d2", configParameters->getProbe("d2"));
 
-    LOG(logINFO) << "Setting analogue decoding offset to " << int(configParameters->getDecodingOffset());
-    api->setDecodingOffset(configParameters->getDecodingOffset());
-    api->setDecodingL1Offset(configParameters->getDecodingL1Offset());
+    api->setDecodingOffsets(configParameters->getDecodingOffsets());
+    api->setDecodingL1Offsets(configParameters->getDecodingL1Offsets());
     api->setDecodingAlphas(configParameters->getDecodingAlphas());
-    api->setDecodingThresholds(configParameters->getDecodingThresholds());
 
-    LOG(logINFO) << "Switching to external clock";
-    api->setExternalClock(1);
+    LOG(logINFO) << "Try switching to external clock";
+    api->setExternalClock(true);
 
     LOG(logINFO) << "DUT info: ";
     api->_dut->info();

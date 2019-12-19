@@ -63,7 +63,6 @@ public:
 
   static ConfigParameters* Singleton();
 
-  std::string vectorToString(std::vector<uint8_t>);
   std::string getTBParameterFileName()    {return fTBParametersFileName;}
   std::string getDACParameterFileName()   {return fDACParametersFileName;}
   std::string getTbmParameterFileName()   {return fTbmParametersFileName;}
@@ -101,13 +100,11 @@ public:
 
   std::vector<std::vector<pxar::pixelConfig> > getRocPixelConfig();
   std::vector<pxar::pixelConfig> getRocPixelConfig(int i);
-  bool customI2cAddresses() {return fI2cAddresses.size() > 0;}
+  bool customI2cAddresses() {return !fI2cAddresses.empty();}
   std::vector<uint8_t> getI2cAddresses() {return fI2cAddresses;}
-  uint8_t getDecodingOffset() { return fOffsetDecoding; }
-  std::vector<float> getDecodingL1Offset() { return fOffsetL1Vector;}
-  std::vector<float> getDecodingAlphas() { return fAlphasVector;}
-  std::vector<uint8_t> getDecodingOffsetVector() { return fOffsetDecodingVector; }
-  std::vector<std::vector<float> > getDecodingThresholds() { return fDecodingThresholds; }
+  std::vector<float> getDecodingL1Offsets() { return fL1Offsets;}
+  std::vector<float> getDecodingAlphas() { return fAlphas;}
+  std::vector<float> getDecodingOffsets() { return fDecodingOffsets; }
 
   bool setTbParameter(std::string, uint8_t, bool appendIfNotFound = false);
   bool setTbPowerSettings(std::string, double);
@@ -157,17 +154,15 @@ public:
   void cleanupString(std::string& str);
   void readNrocs(std::string line);
   void readHubIds(std::string line);
-  void readDecodingThresholds(std::string line);
-  void readDOffsetVector(std::string line);
+  void readDecodingOffsets(const std::string & value);
+  void readL1Offsets(const std::string & value);
+  void readAlphas(const std::string & value);
 
   int getGuiX() {return fGuiX;}
   int getGuiY() {return fGuiY;}
 
   void setGuiX(int x) {fGuiX = x;}
   void setGuiY(int x) {fGuiY = x;}
-
-  std::vector<std::string> split(const std::string & str, const std::string & delim, bool dotrim);
-  std::string trim(const std::string & s, std::string trim_characters="\t\n\r\v []");
 
 private:
 
@@ -194,12 +189,10 @@ private:
   std::string fDirectory;
   std::string fTBName;
   bool fHvOn, fTbmEnable, fTbmEmulator, fKeithleyRemote, fGuiMode;
-  std::string fProbeA1,fProbeA2, fProbeD1, fProbeD2;
-  uint8_t fOffsetDecoding;
-  std::vector<uint8_t> fOffsetDecodingVector;
-  std::vector<float> fOffsetL1Vector;
-  std::vector<float> fAlphasVector;
-  std::vector<std::vector<float> > fDecodingThresholds;
+  std::string fProbeA1, fProbeA2, fProbeD1, fProbeD2;
+  std::vector<float> fDecodingOffsets;
+  std::vector<float> fL1Offsets;
+  std::vector<float> fAlphas;
 
   std::string fTBParametersFileName;
   std::string fTrimVcalSuffix;

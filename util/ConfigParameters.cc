@@ -1,18 +1,17 @@
 #include <iostream>
 #include <fstream>
-#include <sstream>
 #include <string>
 #include <vector>
 #include <algorithm>
-#include <bitset>
 
 #include <cstdlib>
-#include <stdio.h>
+#include <cstdio>
 
 #include "dictionaries.h"
 #include "log.h"
 
 #include "ConfigParameters.hh"
+#include "helper.h"
 
 using namespace std;
 using namespace pxar;
@@ -79,10 +78,9 @@ void ConfigParameters::initialize() {
   fProbeA2 = "sdata2";
   fProbeD1 = "clk";
   fProbeD2 = "ctr";
-  fOffsetDecoding = 0;
-  fOffsetDecodingVector.resize(16, 0);
-  fDecodingThresholds.resize(0);
-  fOffsetL1Vector.resize(16, 0);
+  fDecodingOffsets.resize(fnRocs);
+  fL1Offsets.resize(fnRocs);
+  fAlphas.resize(fnRocs);
 
   rocZeroAnalogCurrent = 0.0;
   fRocType = "psi46digv21respin";
@@ -194,9 +192,9 @@ bool ConfigParameters::readConfigParameterFile(string file) {
       else if (0 == _name.compare("probeD1")) { fProbeD1 = _value; }
       else if (0 == _name.compare("probeD2")) { fProbeD2 = _value; }
 
-      else if (0 == _name.compare("decodingOffset")) { fOffsetDecoding = _ivalue; }
-      else if (_name == "decodingOffsetVector") { readDOffsetVector(_istring.str()); }
-      else if (_name == "analogueThresholds") { readDecodingThresholds(_istring.str()); }
+      else if (_name == "decodingOffset") { readDecodingOffsets(_value); }
+      else if (_name == "l1Offset") { readL1Offsets(_value); }
+      else if (_name == "alphas") { readAlphas(_value); }
       else if (0 == _name.compare("guiX")) { fGuiX = _ivalue; }
       else if (0 == _name.compare("guiY")) { fGuiY = _ivalue; }
 
@@ -770,16 +768,6 @@ bool ConfigParameters::setTrimBits(int trim) {
 }
 
 // ----------------------------------------------------------------------
-string ConfigParameters::vectorToString(vector<uint8_t> vec) {
-  stringstream ss;
-  for (vector<uint8_t>::iterator ivec = vec.begin(); ivec != vec.end() - 1; ivec++)
-    ss << int(*ivec) << ", ";
-  ss << int(vec.back());
-  return ss.str();
-}
-
-
-// ----------------------------------------------------------------------
 bool ConfigParameters::writeConfigParameterFile() {
   char filename[1000];
   sprintf(filename, "%s/configParameters.dat", fDirectory.c_str());
@@ -1211,48 +1199,6 @@ void ConfigParameters::readReadbackCal() {
   }
 }
 
-// ----------------------------------------------------------------------
-void ConfigParameters::readDecodingThresholds(std::string line) {
-
-  line = trim(line, "analogueThresholds ");
-  std::vector<std::vector<float> > thresholds;
-  std::vector<std::string> roc_list = split(line, "]", false);
-  for (size_t i(0); i < roc_list.size(); i++){
-    std::vector<float> tmp;
-    std::vector<std::string> split_string = split(roc_list.at(i), ",", true);
-    for (size_t j(0); j < split_string.size(); j++){
-      if (split_string.at(j).empty())
-        continue;
-      tmp.push_back(float(atof(split_string.at(j).c_str())));
-//      std::cout << atof(split_string.at(j).c_str()) << std::endl;
-    }
-    if (!tmp.empty())
-      thresholds.push_back(tmp);
-  }
-  fDecodingThresholds = thresholds;
-  LOG(logINFO) << "Successfully read decoding thresholds for " << thresholds.size() << " ROCs!";
-}
-
-void ConfigParameters::readDOffsetVector(std::string line) {
-
-  line = trim(line, "analogueOffsetVector ");
-  std::vector<std::vector<float> > offsets;
-  std::vector<std::string> roc_list = split(line, "]", false);
-  for (size_t i(0); i < roc_list.size(); i++){
-    std::vector<float> tmp;
-    std::vector<std::string> split_string = split(roc_list.at(i), ",", true);
-    for (size_t j(0); j < split_string.size(); j++){
-      if (split_string.at(j).empty())
-        continue;
-      tmp.push_back(float(atof(split_string.at(j).c_str())));
-//      std::cout << atof(split_string.at(j).c_str()) << std::endl;
-    }
-    if (!tmp.empty())
-      offsets.push_back(tmp);
-  }
-  fDecodingThresholds = offsets;
-  LOG(logINFO) << "Successfully read decoding offsets for " << offsets.size() << " ROCs!";
-}
 
 // ----------------------------------------------------------------------
 vector<pair<string, double> > ConfigParameters::readReadbackFile(string fname) {
@@ -1363,28 +1309,26 @@ bool ConfigParameters::isMaskedPixel(int roc, int col, int row) {
   return false;
 }
 
-std::vector<std::string> ConfigParameters::split(const std::string &str, const std::string &delim, bool dotrim) {
+void ConfigParameters::readDecodingOffsets(const std::string & value) {
 
-    std::string s(str);
-    std::vector<std::string> result;
-    if (str.empty()) return result;
-    size_t i;
-    while ((i = s.find_first_of(delim)) != std::string::npos) {
-      result.push_back(dotrim ? trim(s.substr(0, i)) : s.substr(0, i));
-      s = s.substr(i + 1);
-    }
-    result.push_back(s);
-    return result;
+  vector<float> values = stringToVector(value, float(0));
+  vector<float> tmp(fnRocs, values.front());
+  fDecodingOffsets = values.size() == fnRocs ? values : tmp;
+  LOG(logINFO) << "Successfully read decoding offsets: " << vectorToString(fDecodingOffsets);
 }
 
-std::string ConfigParameters::trim(const std::string &s, std::string trim_characters) {
+void ConfigParameters::readL1Offsets(const std::string & value) {
 
-  size_t b = s.find_first_not_of(trim_characters);
-  size_t e = s.find_last_not_of(trim_characters);
-  if (b == std::string::npos || e == std::string::npos) {
-    return "";
-  }
-  return std::string(s, b, e - b + 1);
+  vector<float> values = stringToVector(value, float(0));
+  vector<float> tmp(fnRocs, values.front());
+  fL1Offsets = values.size() == fnRocs ? values : tmp;
+  LOG(logINFO) << "Successfully read level 1 offsets: " << vectorToString(fL1Offsets);
 }
 
+void ConfigParameters::readAlphas(const std::string &value) {
 
+  vector<float> values = stringToVector(value, float(0));
+  vector<float> tmp(fnRocs, values.front());
+  fAlphas = values.size() == fnRocs ? values : tmp;
+  LOG(logINFO) << "Successfully read decoding alphas: " << vectorToString(fAlphas);
+}

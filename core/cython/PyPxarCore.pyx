@@ -340,26 +340,21 @@ cdef class PyPxarCore:
         for key, value in power_settings.items():
             ps.push_back((key,float(value)))
         self.thisptr.setTestboardPower(ps)
-    def setDecodingOffset(self, offset):
-        cdef uint8_t os = offset
-        self.thisptr.setDecodingOffset(os)
-    def setDecodingL1Offset(self, lst):
+    def setDecodingOffsets(self, values):
         cdef vector[float] offsets
-        for offset in lst:
+        for offset in values:
             offsets.push_back(offset)
-        self.thisptr.setDecodingL1Offset(offsets)
-    def setDecodingAlphas(self, lst):
+        self.thisptr.setDecodingOffsets(offsets)
+    def setDecodingL1Offsets(self, values):
+        cdef vector[float] offsets
+        for offset in values:
+            offsets.push_back(offset)
+        self.thisptr.setDecodingL1Offsets(offsets)
+    def setDecodingAlphas(self, values):
         cdef vector[float] alphas
-        for alpha in lst:
+        for alpha in values:
             alphas.push_back(alpha)
-        self.thisptr.setDecodingL1Offset(alphas)
-    def setDecodingThresholds(self, thresholds):
-        cdef vector[vector[float]] th
-        for i, lst in enumerate(thresholds):
-            th.push_back(vector[float]())
-            for value in lst:
-                th.at(i).push_back(value)
-        self.thisptr.setDecodingThresholds(th)
+        self.thisptr.setDecodingAlphas(alphas)
     def getTestboardDelays(self):
         r = self.thisptr.getTestboardDelays()
         return {tup.first: tup.second for tup in r}

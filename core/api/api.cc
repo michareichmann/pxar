@@ -90,15 +90,8 @@ void pxarCore::setTestboardDelays(std::vector<std::pair<std::string,uint8_t> > s
   LOG(logDEBUGAPI) << "Testboard signal delays updated.";
 }
 
-void pxarCore::setDecodingOffset(uint8_t offset) { _hal->setOffset(offset); }
-//void pxarCore::setDecodingOffset(std::vector<uint8_t> offsetv) { _hal->setOffset(offsetv); }
-//void pxarCore::setDecodingOffset(std::vector<uint16_t> offsetv) { _hal->setOffset(offsetv); }
-void pxarCore::setDecodingOffset(std::vector<float> offsetv) { _hal->setOffset(offsetv); }
-
-void pxarCore::setDecodingThresholds(std::vector<std::vector<float> > values) { _hal->setDecodingThresholds(values); }
-
-void pxarCore::setDecodingL1Offset(std::vector<float> offsetl1v){ _hal->setLevel1s(offsetl1v);}
-
+void pxarCore::setDecodingOffsets(std::vector<float> offsetv) { _hal->setOffset(offsetv); }
+void pxarCore::setDecodingL1Offsets(std::vector<float> offsetl1v){ _hal->setLevel1s(offsetl1v);}
 void pxarCore::setDecodingAlphas(std::vector<float> alphas){ _hal->setAlphas(alphas);}
 
 void pxarCore::setPatternGenerator(std::vector<std::pair<std::string,uint8_t> > pg_setup) {
