@@ -7,7 +7,7 @@
 from ROOT import PyConfig
 PyConfig.IgnoreCommandLineOptions = True
 from ROOT import TGraphErrors, TGaxis, TLatex, TGraphAsymmErrors, TCanvas, TLegend, TArrow, TPad, TCutG, TLine, TPaveText, TPaveStats
-from ROOT import gROOT, gStyle, kGreen, kOrange, kViolet, kYellow, kRed, kBlue, kMagenta, kAzure, kCyan, kTeal
+from ROOT import gROOT, gStyle, kGreen, kOrange, kViolet, kYellow, kRed, kBlue, kMagenta, kAzure, kCyan, kTeal, TColor
 from utils import *
 from os.path import dirname, join
 from numpy import ndarray, zeros, array
@@ -425,8 +425,18 @@ def set_time_axis(histo, form='%H:%M', off=0):
     histo.GetXaxis().SetTimeDisplay(1)
 
 
-def set_palette(pal):
-    gStyle.SetPalette(pal)
+def set_palette(pal=1, custom=False):
+    if custom:
+        stops = array([0., .5, 1], 'd')
+        green = array([0. / 255., 200. / 255., 80. / 255.], 'd')
+        blue = array([0. / 255., 0. / 255., 0. / 255.], 'd')
+        red = array([180. / 255., 200. / 255., 0. / 255.], 'd')
+        gStyle.SetNumberContours(20)
+        bla = TColor.CreateGradientColorTable(len(stops), stops, red, green, blue, 255)
+        color_table = array([bla + ij for ij in xrange(255)], 'i')
+        gStyle.SetPalette(len(color_table), color_table)
+    else:
+        gStyle.SetPalette(pal)
 
 
 def load_resolution():
