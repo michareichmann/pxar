@@ -384,7 +384,7 @@ namespace pxar {
           tword1 = ttword1 >= 0? int(ttword1 + 0.5) : int(ttword1 - 0.5);
           float ttword2 = (float(expandSign((*(word + 2)) & 0x0fff)) - timeCompensator.at(roc_n) * float(tword1)) / float(1 - timeCompensator.at(roc_n));
           tword2 = ttword2 >= 0? int(ttword2 + 0.5) : int(ttword2 - 0.5);
-          if(0<=roc_n && roc_n <4) {
+          if(0 <= roc_n && roc_n < 16) {
               ultraBlackVect[roc_n].push_back(tword0);
               blackVect[roc_n].push_back(tword1 - offsetB.at(roc_n));
               lastDacVect[roc_n].push_back(tword2);
