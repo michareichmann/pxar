@@ -327,12 +327,12 @@ class CLIX:
             data.append(event) if event is not None else do_nothing()
         return data
 
-    def daq_get_raw_event(self, convert=1):
+    def daq_get_raw_event(self, convert=True):
         try:
             event = self.api.daqGetRawEvent()
         except RuntimeError:
             return
-        event = self.convert_raw_event(event) if convert == 1 else event
+        event = self.convert_raw_event(event) if convert else event
         return event
 
     def send_triggers(self, n, period=500):
@@ -342,16 +342,16 @@ class CLIX:
         self.daq_stop()
         sleep(.2)
 
-    def get_raw_buffer(self):
+    def get_raw_buffer(self, convert=True):
         events = []
         while not events or events[-1] is not None:
-            events.append(self.get_raw_event(trigger=False))
+            events.append(self.daq_get_raw_event(convert))
         return array(events[:-1])
 
-    def get_raw_event(self, convert=1, trigger=True):
+    def get_raw_event(self, convert=True, trigger=True, n_trig=1):
         if trigger:
-            self.send_triggers(1)
-        return self.daq_get_raw_event(convert)
+            self.send_triggers(n_trig)
+        return self.get_raw_buffer(convert)
 
     def get_mean_black(self, n_trigger=1000):
         self.send_triggers(n_trigger)
@@ -364,7 +364,7 @@ class CLIX:
     def show_event_decoding(self):
         self.daq_start()
         self.daq_trigger()
-        event = self.daq_get_raw_event(convert=0)
+        event = self.daq_get_raw_event(convert=False)
         print 'Raw data: {}\nhex:   {}\n'.format(event, [hex(num)[2:].zfill(4) for num in event])
         i = 0
         for _ in event:
