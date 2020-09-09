@@ -16,7 +16,7 @@ path.insert(1, join(pxar_dir, 'python', 'src'))
 from draw import *
 from ROOT import TCanvas, TCutG, TMultiGraph, TH1I, TSpectrum
 from argparse import ArgumentParser
-from numpy import mean, delete, arange
+from numpy import mean, delete
 from numpy.random import randint
 from time import time, sleep
 from pxar_helpers import *
@@ -24,7 +24,8 @@ from pxar_plotter import Plotter
 from TreeWriterLjubljana import TreeWriterLjubljana
 from hdf5_writer import HDF5Writer
 from json import dumps
-
+from threading import Thread
+import atexit
 
 BREAK = False
 z = None
@@ -40,6 +41,17 @@ signal.signal(signal.SIGINT, signal_handler)
 dacdict = PyRegisterDictionary()
 probedict = PyProbeDictionary()
 prog_name = basename(argv.pop(0))
+
+
+def ex():
+    if z is not None:
+        z.IsRunning = False
+        sleep(.5)
+        z.api.HVoff()
+    print 'Bye ...'
+
+
+atexit.register(ex)
 
 
 class CLIX:
