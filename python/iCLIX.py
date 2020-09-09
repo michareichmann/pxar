@@ -149,15 +149,15 @@ class CLIX:
         print '\n===== [{c}, {r}, {p}] ====='.format(c=column, r=row, p=ph)
 
     def set_offset(self, value):
-        self.api.setDecodingOffset(value)
+        self.api.setBlackOffsets(make_list(value))
         print 'set analogue decoding offset to: {}'.format(value)
 
-    def set_L1_offset(self, value):
-        self.api.setDecodingL1Offset(value)
+    def set_l1_offset(self, value):
+        self.api.setDecodingL1Offsets(make_list(value))
         print 'set analogue L1 decoding offset to: {}'.format(value)
 
     def set_alphas(self, value):
-        self.api.setDecodingAlphas(value)
+        self.api.setDecodingAlphas(make_list(value))
         print 'set analogue decoding alphas to: {}'.format(value)
 
     @staticmethod
@@ -191,19 +191,26 @@ class CLIX:
                 break
         return n_hits
 
-    def save_config(self, key, value):
-        f_name = join(self.Dir, 'configParameters.dat')
+    def save_config(self, key, value, name='configParameters'):
+        f_name = join(self.Dir, '{}.dat'.format(name))
         with open(f_name, 'r+') as f:
             lines = f.readlines()
             for i, line in enumerate(lines):
                 if key in line:
-                    lines[i] = '{} {}\n'.format(key, value)
+                    old = line[line.find(key) + len(key):]
+                    rsize = len(old) - 1 if abs(len(value) - len(old.strip())) < 3 else len(value) + 1  # -1 for \n
+                    lines[i] = line.replace(old, value.rjust(rsize)) + '\n'
                     info('changing existing config setting of {} from {} to {}'.format(key, ' '.join(line.split()[1:]), value))
             if not any(key in line for line in lines):
-                lines.append('{} {}'.format(key, value))
+                lines.append('{} {}\n'.format(key, value))
                 info('adding config setting {} with value {}'.format(key, value))
+            print lines
             f.seek(0)
+            f.truncate()
             f.writelines(lines)
+
+    def save_tb_config(self, key, value):
+        self.save_config(key, value, 'tbParameters')
     # endregion HELPERS
     # -----------------------------------------
 
