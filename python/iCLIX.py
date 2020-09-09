@@ -75,10 +75,10 @@ class CLIX:
         self.NRows = 80
         self.NCols = 52
         set_palette(custom=True)
-
         self.Plotter = Plotter()
         self.Draw = Draw()
         self.PBar = PBar()
+        self.IsRunning = False
 
     def restart_api(self):
         self.api = None
@@ -409,6 +409,29 @@ class CLIX:
         self.daq_trigger()
         self.daq_stop()
         print 'Trigger loop with frequency of {f}Hz {m}'.format(f=freq, m='started' if on else 'stopped')
+
+    def data_loop(self, freq=10, status=ON):
+
+        if self.IsRunning:
+            self.IsRunning = False
+            sleep(.1)
+        self.IsRunning = status
+        if status == OFF or not freq:
+            self.daq_stop()
+            return
+
+        def dloop():
+            t0 = time()
+            self.daq_start()
+            z.set_clock(z.get_tb_delay('clk'))  # reduces noise
+            while self.IsRunning:
+                self.daq_trigger(1, 500)
+                while time() - t0 < .99 / freq:
+                    sleep(1. / 100. / freq)
+                t0 = time()
+        t = Thread(target=dloop)
+        t.setDaemon(True)
+        t.start()
 
     def get_address_levels(self, n_trigger=1000, data=None):
         h = TH1I('hal', 'Analogue Adress Levels', 1024, -512, 511)
