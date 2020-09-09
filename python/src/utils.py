@@ -8,7 +8,7 @@ from os import makedirs, _exit
 from ConfigParser import ConfigParser
 from datetime import datetime
 from ROOT import TFile, gROOT
-from numpy import average, sqrt
+from numpy import average, sqrt, array
 from progressbar import Bar, ETA, FileTransferSpeed, Percentage, ProgressBar
 
 
@@ -22,6 +22,9 @@ GREEN = '\033[92m'
 ENDC = '\033[0m'
 YELLOW = '\033[93m'
 RED = '\033[91m'
+
+ON = True
+OFF = False
 
 
 def get_t_str():
@@ -62,6 +65,18 @@ def is_num(string):
         return True
     except ValueError:
         return False
+
+
+def choose(v, default, decider='None', *args, **kwargs):
+    use_default = decider is None if decider != 'None' else v is None
+    if callable(default) and use_default:
+        default = default(*args, **kwargs)
+    return default if use_default else v
+
+
+def make_list(value, dtype=None):
+    v = array([choose(value, [])]).flatten()
+    return v.tolist() if dtype == list else v.astype(dtype) if dtype is not None else v
 
 
 def print_banner(msg, symbol='=', new_lines=True):
@@ -153,7 +168,6 @@ class PBar:
 
     def update(self, i):
         self.finish() if i >= self.PBar.maxval - 1 else self.PBar.update(i + 1)
-
 
     def finish(self):
         self.PBar.finish()
