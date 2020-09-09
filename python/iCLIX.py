@@ -241,7 +241,12 @@ class CLIX:
         self.api.setDAC(name, value, roc_id)
 
     def get_ia(self):
-        print 'Analog Current: {} mA'.format(self.api.getTBia() * 1000)
+        self.api.getTBia()  # first reading is always wrong
+        values = []
+        for i in xrange(10):
+            values.append(self.api.getTBia())
+            sleep(.05)
+        print 'Analog Current: {:2.2f} mA'.format(mean(values) * 1000)
 
     def get_n_rocs(self):
         return self.api.getNEnabledRocs()
