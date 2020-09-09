@@ -16,7 +16,7 @@ path.insert(1, join(pxar_dir, 'python', 'src'))
 from draw import *
 from ROOT import TCanvas, TCutG, TMultiGraph, TH1I, TSpectrum
 from argparse import ArgumentParser
-from numpy import mean, delete
+from numpy import mean, delete, argmin
 from numpy.random import randint
 from time import time, sleep
 from pxar_helpers import *
@@ -504,7 +504,7 @@ class CLIX:
     # -----------------------------------------
     # region plotting
     def print_eff(self, data, n_trig):
-        unmasked = 4160 - self.api.getNMaskedPixels()
+        unmasked = 4160 * self.get_n_rocs() - self.api.getNMaskedPixels()
         active = self.api.getNEnabledPixels()
         read_back = sum(px.value for px in data)
         total = n_trig * (unmasked if unmasked < active else active)
@@ -828,12 +828,14 @@ class CLIX:
         self.api.setTestboardDelays({'tindelay': 0, 'toutdelay': 20})
         self.enable_all()
         self.api.maskAllPixels(1)
+        self.cycle_tb()  # first reading may be bad
         data = self.get_raw_event()
-        tin = data.index(min(data))
-        tout = 20 - (len(data) - tin - 3 * self.api.getNRocs())
+        tin = argmin(data)
+        tout = 20 - (data.size - tin - 3 * self.api.getNRocs())
         self.api.setTestboardDelays({'tindelay': tin, 'toutdelay': tout})
-        info('set tindelay to:  {:2d}'.format(tin))
-        info('set toutdelay to: {:2d}'.format(tout))
+        self.save_tb_config('tindelay', tin)
+        self.save_tb_config('toutdelay', tout)
+        self.api.maskAllPixels(0)
 
     def find_offsets(self, n_trig=1000):
         d_off, l1_off = [], []
