@@ -223,6 +223,13 @@ class CLIX:
         else:
             print 'Unknown dac {d}!'.format(d=dac)
 
+    def get_tb_delay(self, name):
+        delays = self.api.getTestboardDelays()
+        if name not in self.api.getTestboardDelays():
+            warning('{} not a valid delay'.format(name))
+            return
+        return delays[name]
+
     def set_tb_delay(self, delay, value):
         if delay not in self.DacDict.getAllDTBNames():
             print 'The delay {} does not exist'.format(delay)
