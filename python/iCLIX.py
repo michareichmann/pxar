@@ -838,17 +838,27 @@ class CLIX:
         self.api.maskAllPixels(0)
 
     def find_offsets(self, n_trig=1000):
-        d_off, l1_off = [], []
+        b_off, l1_off, alpha = [], [], []
         self.enable_single_pixel(15, 59)
-        self.send_triggers(n_trig)
-        data = self.get_raw_buffer()
+        self.get_raw_event()  # first reading may be bad
+        data = self.get_raw_event(n_trig=n_trig)
+        if data.shape[1] != 9 * self.get_n_rocs():
+            warning('corrupt data!')
+            return
         for roc in xrange(self.get_n_rocs()):
             l1_off.append(mean(data[:, (3 + 9 * roc):(8 + 9 * roc)]))
-            d_off.append(l1_off[roc] - mean(data[:, 1 + 9 * roc]))
+            b_off.append(mean(data[:, 1 + 9 * roc]))
+        self.enable_single_pixel(21, 5)
+        d_alpha = self.get_raw_event(n_trig=n_trig)
+        for roc in range(self.get_n_rocs()):
+            high, low0, low1 = mean(d_alpha[:, 5]), mean(data[:, 6]), mean(d_alpha[:, 6])
+            alpha.append(1. / (high / (low1 - low0) + 1.))
         self.api.setDecodingL1Offsets(l1_off)
-        self.api.setBlackOffsets(d_off)
-        self.save_config('l1Offset', '[{}]'.format(', '.join('{:1.1f}'.format(v) for v in l1_off)))
-        self.save_config('blackOffset',  '[{}]'.format(', '.join('{:1.1f}'.format(v) for v in d_off)))
+        self.api.setBlackOffsets(b_off)
+        self.api.setDecodingAlphas(alpha)
+        self.save_config('l1Offset', '[{}]'.format(','.join('{:1.1f}'.format(v) for v in l1_off)))
+        self.save_config('blackOffset',  '[{}]'.format(','.join('{:1.1f}'.format(v) for v in b_off)))
+        self.save_config('alphas',  '[{}]'.format(','.join('{:1.2f}'.format(v) for v in alpha)))
         self.enable_all()
 
     def find_clk_delay(self, min_val=0, max_val=25, n_triggers=1000):
