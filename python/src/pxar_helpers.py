@@ -11,7 +11,7 @@ from datetime import datetime
 from ConfigParser import ConfigParser
 from json import loads
 from utils import info, critical
-from numpy import full
+from numpy import full, array, arange
 
 
 def arity(n, m, cs=[]): # n = min number of args, m = max number of args, cs = types
@@ -321,10 +321,10 @@ def PxarStartup(directory, verbosity, trim=None):
     
     # Power settings:
     power_settings = {
-        "va":config.get("va", 1.9),
-        "vd":config.get("vd", 2.6),
-        "ia":config.get("ia", 1.190),
-        "id":config.get("id", 1.10)}
+        "va": config.get("va", 1.9),
+        "vd": config.get("vd", 2.6),
+        "ia": config.get("ia", 1.190),
+        "id": config.get("id", 1.10)}
     if float(power_settings['va']) > 100:
         print 'INFO: set power settings from [mV] to [V]'
         power_settings = {key: int(value) / 1000. for key, value in power_settings.iteritems()}
@@ -349,35 +349,25 @@ def PxarStartup(directory, verbosity, trim=None):
             p.mask = False
             pixels.append(p)
 
-    rocDacs = []
-    rocPixels = list()
-    rocI2C = []
-    config_nrocs = config.get("nrocs").split()
-    nrocs = int(config_nrocs[0])
-    i2cs = [i for i in xrange(nrocs)]
-    if len(config_nrocs) > 1:
-        if config_nrocs[1].startswith('i2c'):
-            i2cs = ' '.join(config_nrocs[2:])
-            i2cs = [int(i) for i in i2cs.split(',')]
-            print "Number of ROCs:", nrocs, "\b; Configured I2C's:", i2cs
-    for i2c in i2cs:
-        dac_file = '{dir}/{f}{trim}_C{i2c}.dat'.format(dir=directory, trim=trim if trim is not None else '', i2c=i2c, f=config.get('dacParameters'))
-        trim_file = '{dir}/{f}{trim}_C{i2c}.dat'.format(dir=directory, trim=trim if trim is not None else '', i2c=i2c, f=config.get('trimParameters'))
-        dacconfig = PxarParametersFile(dac_file)
-        trimconfig = PxarTrimFile(trim_file, i2c, masks.get())
-        rocI2C.append(i2c)
-        rocDacs.append(dacconfig.getAll())
-        rocPixels.append(trimconfig.getAll())
-    n_pixels = [len(pix) for pix in rocPixels]
+    roc_dacs = []
+    roc_pixels = list()
+    nrocs, roc_i2c = find_i2cs(config)
+
+    for i2c in roc_i2c:
+        dacconfig = PxarParametersFile(join(directory, '{}{}_C{}.dat'.format(config.get('dacParameters'), trim if trim is not None else '', i2c)))
+        trimconfig = PxarTrimFile(join(directory, '{}{}_C{}.dat'.format(config.get('trimParameters'), trim if trim is not None else '', i2c)), i2c, masks.get())
+        roc_dacs.append(dacconfig.getAll())
+        roc_pixels.append(trimconfig.getAll())
+    n_pixels = [len(pix) for pix in roc_pixels]
     if all(npix == n_pixels[0] for npix in n_pixels):
         print 'We have {n1} pixels for all {n2} ROCs'.format(n1=n_pixels[0], n2=len(n_pixels))
     else:
-        for i2c, npix in zip(rocI2C, n_pixels):
+        for i2c, npix in zip(roc_i2c, n_pixels):
             print 'We have {n} pixels for ROC {i}'.format(n=npix, i=i2c)
 
     roc_type =  config.get('rocType')
     # set pgcal according to wbc
-    pgcal = int(rocDacs[0]['wbc'])
+    pgcal = int(roc_dacs[0]['wbc'])
     pgcal += 6 if 'dig' in roc_type else 5
     print 'pgcal is:', pgcal
 
@@ -420,9 +410,22 @@ def PxarStartup(directory, verbosity, trim=None):
     api.SignalProbe('d2', config.get('probeD2', 'ctr'))
 
     hubids = [int(i) for i in config.get("hubId", 31).split(',')]
-    info('HubIds set to: {}'.format(hubids))
+    # info('HubIds set to: {}'.format(hubids))
+    if roc_type == 'psi46v2':
+        info('tindelay/toutdelay: {}/{}'.format(tbparameters.get('tindelay'), tbparameters.get('toutdelay')))
+    else:
+        info('clk/phase: {}/{}'.format(tbparameters.get('clk'), tbparameters.get('deser160phase')))
     info('And we have just initialized {} pixel configs to be used for every ROC!'.format(len(pixels)))
-    api.initDUT(hubids, config.get("tbmType", "tbm08"), tbmDACs, config.get("rocType"), rocDacs, rocPixels, rocI2C)
+    api.initDUT(hubids, config.get("tbmType", "tbm08"), tbmDACs, config.get("rocType"), roc_dacs, roc_pixels, roc_i2c)
     api.testAllPixels(True)
     info('pxar API is now started and configured.')
     return api
+
+
+def find_i2cs(config):
+    config = config.get('nrocs')
+    nrocs = int(config.split()[0])
+    i2cs = arange(nrocs, 'u2') if 'i2c' not in config else array(config.split('i2c:')[-1].split(','), 'u2')
+    info('Number of ROCs: {}'.format(nrocs))
+    info('Configured I2Cs: {}'.format(i2cs))
+    return nrocs, i2cs

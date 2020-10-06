@@ -67,6 +67,7 @@ class HDF5Writer(FileWriter):
         self.NHits = array(self.NHits, 'u1').T
         self.NEvents = self.NHits[0].size
 
+    # TODO revise this since algorithm is faulty!
     def clusterise(self):
         self.PBar.start(self.NEvents * self.NPlanes)
         info('clusterise ...')

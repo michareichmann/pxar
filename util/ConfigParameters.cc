@@ -192,7 +192,7 @@ bool ConfigParameters::readConfigParameterFile(string file) {
       else if (0 == _name.compare("probeD1")) { fProbeD1 = _value; }
       else if (0 == _name.compare("probeD2")) { fProbeD2 = _value; }
 
-      else if (_name == "decodingOffset") { readDecodingOffsets(_value); }
+      else if (_name == "blackOffset") { readDecodingOffsets(_value); }
       else if (_name == "l1Offset") { readL1Offsets(_value); }
       else if (_name == "alphas") { readAlphas(_value); }
       else if (0 == _name.compare("guiX")) { fGuiX = _ivalue; }

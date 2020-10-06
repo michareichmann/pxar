@@ -16,7 +16,7 @@ path.insert(1, join(pxar_dir, 'python', 'src'))
 from draw import *
 from ROOT import TCanvas, TCutG, TMultiGraph, TH1I, TSpectrum
 from argparse import ArgumentParser
-from numpy import mean, delete, arange
+from numpy import mean, delete, argmin
 from numpy.random import randint
 from time import time, sleep
 from pxar_helpers import *
@@ -24,7 +24,8 @@ from pxar_plotter import Plotter
 from TreeWriterLjubljana import TreeWriterLjubljana
 from hdf5_writer import HDF5Writer
 from json import dumps
-
+from threading import Thread
+import atexit
 
 BREAK = False
 z = None
@@ -40,6 +41,17 @@ signal.signal(signal.SIGINT, signal_handler)
 dacdict = PyRegisterDictionary()
 probedict = PyProbeDictionary()
 prog_name = basename(argv.pop(0))
+
+
+def ex():
+    if z is not None:
+        z.IsRunning = False
+        sleep(.5)
+        z.api.HVoff()
+    print 'Bye ...'
+
+
+atexit.register(ex)
 
 
 class CLIX:
@@ -63,10 +75,10 @@ class CLIX:
         self.NRows = 80
         self.NCols = 52
         set_palette(custom=True)
-
         self.Plotter = Plotter()
         self.Draw = Draw()
         self.PBar = PBar()
+        self.IsRunning = False
 
     def restart_api(self):
         self.api = None
@@ -137,15 +149,15 @@ class CLIX:
         print '\n===== [{c}, {r}, {p}] ====='.format(c=column, r=row, p=ph)
 
     def set_offset(self, value):
-        self.api.setDecodingOffset(value)
+        self.api.setBlackOffsets(make_list(value))
         print 'set analogue decoding offset to: {}'.format(value)
 
-    def set_L1_offset(self, value):
-        self.api.setDecodingL1Offset(value)
+    def set_l1_offset(self, value):
+        self.api.setDecodingL1Offsets(make_list(value))
         print 'set analogue L1 decoding offset to: {}'.format(value)
 
     def set_alphas(self, value):
-        self.api.setDecodingAlphas(value)
+        self.api.setDecodingAlphas(make_list(value))
         print 'set analogue decoding alphas to: {}'.format(value)
 
     @staticmethod
@@ -179,19 +191,26 @@ class CLIX:
                 break
         return n_hits
 
-    def save_config(self, key, value):
-        f_name = join(self.Dir, 'configParameters.dat')
+    def save_config(self, key, value, name='configParameters'):
+        f_name = join(self.Dir, '{}.dat'.format(name))
         with open(f_name, 'r+') as f:
             lines = f.readlines()
             for i, line in enumerate(lines):
                 if key in line:
-                    lines[i] = '{} {}\n'.format(key, value)
+                    old = line[line.find(key) + len(key):]
+                    rsize = len(old) - 1 if abs(len(value) - len(old.strip())) < 3 else len(value) + 1  # -1 for \n
+                    lines[i] = line.replace(old, value.rjust(rsize)) + '\n'
                     info('changing existing config setting of {} from {} to {}'.format(key, ' '.join(line.split()[1:]), value))
             if not any(key in line for line in lines):
-                lines.append('{} {}'.format(key, value))
+                lines.append('{} {}\n'.format(key, value))
                 info('adding config setting {} with value {}'.format(key, value))
+            print lines
             f.seek(0)
+            f.truncate()
             f.writelines(lines)
+
+    def save_tb_config(self, key, value):
+        self.save_config(key, value, 'tbParameters')
     # endregion HELPERS
     # -----------------------------------------
 
@@ -204,6 +223,13 @@ class CLIX:
         else:
             print 'Unknown dac {d}!'.format(d=dac)
 
+    def get_tb_delay(self, name):
+        delays = self.api.getTestboardDelays()
+        if name not in self.api.getTestboardDelays():
+            warning('{} not a valid delay'.format(name))
+            return
+        return delays[name]
+
     def set_tb_delay(self, delay, value):
         if delay not in self.DacDict.getAllDTBNames():
             print 'The delay {} does not exist'.format(delay)
@@ -215,7 +241,12 @@ class CLIX:
         self.api.setDAC(name, value, roc_id)
 
     def get_ia(self):
-        print 'Analog Current: {} mA'.format(self.api.getTBia() * 1000)
+        self.api.getTBia()  # first reading is always wrong
+        values = []
+        for i in xrange(10):
+            values.append(self.api.getTBia())
+            sleep(.05)
+        print 'Analog Current: {:2.2f} mA'.format(mean(values) * 1000)
 
     def get_n_rocs(self):
         return self.api.getNEnabledRocs()
@@ -296,12 +327,12 @@ class CLIX:
             data.append(event) if event is not None else do_nothing()
         return data
 
-    def daq_get_raw_event(self, convert=1):
+    def daq_get_raw_event(self, convert=True):
         try:
             event = self.api.daqGetRawEvent()
         except RuntimeError:
             return
-        event = self.convert_raw_event(event) if convert == 1 else event
+        event = self.convert_raw_event(event) if convert else event
         return event
 
     def send_triggers(self, n, period=500):
@@ -311,16 +342,16 @@ class CLIX:
         self.daq_stop()
         sleep(.2)
 
-    def get_raw_buffer(self):
+    def get_raw_buffer(self, convert=True):
         events = []
         while not events or events[-1] is not None:
-            events.append(self.get_raw_event(trigger=False))
+            events.append(self.daq_get_raw_event(convert))
         return array(events[:-1])
 
-    def get_raw_event(self, convert=1, trigger=True):
+    def get_raw_event(self, convert=True, trigger=True, n_trig=1):
         if trigger:
-            self.send_triggers(1)
-        return self.daq_get_raw_event(convert)
+            self.send_triggers(n_trig)
+        return self.get_raw_buffer(convert)
 
     def get_mean_black(self, n_trigger=1000):
         self.send_triggers(n_trigger)
@@ -333,7 +364,7 @@ class CLIX:
     def show_event_decoding(self):
         self.daq_start()
         self.daq_trigger()
-        event = self.daq_get_raw_event(convert=0)
+        event = self.daq_get_raw_event(convert=False)
         print 'Raw data: {}\nhex:   {}\n'.format(event, [hex(num)[2:].zfill(4) for num in event])
         i = 0
         for _ in event:
@@ -398,6 +429,29 @@ class CLIX:
         self.daq_stop()
         print 'Trigger loop with frequency of {f}Hz {m}'.format(f=freq, m='started' if on else 'stopped')
 
+    def data_loop(self, freq=10, status=ON):
+
+        if self.IsRunning:
+            self.IsRunning = False
+            sleep(.1)
+        self.IsRunning = status
+        if status == OFF or not freq:
+            self.daq_stop()
+            return
+
+        def dloop():
+            t0 = time()
+            self.daq_start()
+            z.set_clock(z.get_tb_delay('clk'))  # reduces noise
+            while self.IsRunning:
+                self.daq_trigger(1, 500)
+                while time() - t0 < .99 / freq:
+                    sleep(1. / 100. / freq)
+                t0 = time()
+        t = Thread(target=dloop)
+        t.setDaemon(True)
+        t.start()
+
     def get_address_levels(self, n_trigger=1000, data=None):
         h = TH1I('hal', 'Analogue Adress Levels', 1024, -512, 511)
         if data is None:
@@ -450,7 +504,7 @@ class CLIX:
     # -----------------------------------------
     # region plotting
     def print_eff(self, data, n_trig):
-        unmasked = 4160 - self.api.getNMaskedPixels()
+        unmasked = 4160 * self.get_n_rocs() - self.api.getNMaskedPixels()
         active = self.api.getNEnabledPixels()
         read_back = sum(px.value for px in data)
         total = n_trig * (unmasked if unmasked < active else active)
@@ -774,25 +828,37 @@ class CLIX:
         self.api.setTestboardDelays({'tindelay': 0, 'toutdelay': 20})
         self.enable_all()
         self.api.maskAllPixels(1)
+        self.cycle_tb()  # first reading may be bad
         data = self.get_raw_event()
-        tin = data.index(min(data))
-        tout = 20 - (len(data) - tin - 3 * self.api.getNRocs())
+        tin = argmin(data)
+        tout = 20 - (data.size - tin - 3 * self.api.getNRocs())
         self.api.setTestboardDelays({'tindelay': tin, 'toutdelay': tout})
-        info('set tindelay to:  {:2d}'.format(tin))
-        info('set toutdelay to: {:2d}'.format(tout))
+        self.save_tb_config('tindelay', tin)
+        self.save_tb_config('toutdelay', tout)
+        self.api.maskAllPixels(0)
 
     def find_offsets(self, n_trig=1000):
-        d_off, l1_off = [], []
+        b_off, l1_off, alpha = [], [], []
         self.enable_single_pixel(15, 59)
-        self.send_triggers(n_trig)
-        data = self.get_raw_buffer()
+        self.get_raw_event()  # first reading may be bad
+        data = self.get_raw_event(n_trig=n_trig)
+        if data.shape[1] != 9 * self.get_n_rocs():
+            warning('corrupt data!')
+            return
         for roc in xrange(self.get_n_rocs()):
             l1_off.append(mean(data[:, (3 + 9 * roc):(8 + 9 * roc)]))
-            d_off.append(l1_off[roc] - mean(data[:, 1 + 9 * roc]))
+            b_off.append(mean(data[:, 1 + 9 * roc]))
+        self.enable_single_pixel(21, 5)
+        d_alpha = self.get_raw_event(n_trig=n_trig)
+        for roc in range(self.get_n_rocs()):
+            high, low0, low1 = mean(d_alpha[:, 5]), mean(data[:, 6]), mean(d_alpha[:, 6])
+            alpha.append(1. / (high / (low1 - low0) + 1.))
         self.api.setDecodingL1Offsets(l1_off)
-        self.api.setBlackOffsets(d_off)
-        self.save_config('l1Offset', '[{}]'.format(', '.join('{:1.1f}'.format(v) for v in l1_off)))
-        self.save_config('blackOffset',  '[{}]'.format(', '.join('{:1.1f}'.format(v) for v in d_off)))
+        self.api.setBlackOffsets(b_off)
+        self.api.setDecodingAlphas(alpha)
+        self.save_config('l1Offset', '[{}]'.format(','.join('{:1.1f}'.format(v) for v in l1_off)))
+        self.save_config('blackOffset',  '[{}]'.format(','.join('{:1.1f}'.format(v) for v in b_off)))
+        self.save_config('alphas',  '[{}]'.format(','.join('{:1.2f}'.format(v) for v in alpha)))
         self.enable_all()
 
     def find_clk_delay(self, min_val=0, max_val=25, n_triggers=1000):
