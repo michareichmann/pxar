@@ -185,7 +185,7 @@ bool pxarCore::initDUT(std::vector<uint8_t> hubids,
       LOG(logCRITICAL) << "This cannot end well...";
       throw InvalidConfig("Mismatch between number of I2C addresses and DAC configurations");
     }
-    string i2cstring("");
+    std::string i2cstring("");
     LOG(logDEBUGAPI) << "I2C addresses for all ROCs are provided as user input: "<<i2cstring;
     for (unsigned int i = 0; i < rocI2Cs.size(); ++i) LOG(logDEBUGAPI)<<i<<" "<<(int)rocI2Cs[i];
 
