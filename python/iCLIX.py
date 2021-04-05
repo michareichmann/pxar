@@ -217,13 +217,19 @@ class CLIX:
     # -----------------------------------------
     # region API
     def get_dac(self, dac, roc_id=0):
+        """:returns: the current value of the DAC [dac] of the ROC with id [roc_id]. """
         dacs = self.api.getRocDACs(roc_id)
         if dac in dacs:
             return dacs[dac]
         else:
             print 'Unknown dac {d}!'.format(d=dac)
 
+    def set_dac(self, name, value, roc_id=None):
+        """sets the value of the DAC [dac] with ROC ID [roc_id] to [value]. """
+        self.api.setDAC(name, value, roc_id)
+
     def get_tb_delay(self, name):
+        """:returns: the current value of the testboard delay [name]. """
         delays = self.api.getTestboardDelays()
         if name not in self.api.getTestboardDelays():
             warning('{} not a valid delay'.format(name))
@@ -231,16 +237,15 @@ class CLIX:
         return delays[name]
 
     def set_tb_delay(self, delay, value):
+        """sets the value of the DAC [dac] to [value]. """
         if delay not in self.DacDict.getAllDTBNames():
             print 'The delay {} does not exist'.format(delay)
             return
         self.TBDelays[delay] = value
         self.api.setTestboardDelays(self.TBDelays)
 
-    def set_dac(self, name, value, roc_id=None):
-        self.api.setDAC(name, value, roc_id)
-
     def get_ia(self):
+        """:returns: the analogue current consumption of the testboard."""
         self.api.getTBia()  # first reading is always wrong
         values = []
         for i in xrange(10):
@@ -249,6 +254,7 @@ class CLIX:
         print 'Analog Current: {:2.2f} mA'.format(mean(values) * 1000)
 
     def get_n_rocs(self):
+        """:returns: the number of enabled ROCs."""
         return self.api.getNEnabledRocs()
     # endregion API
     # -----------------------------------------
@@ -259,6 +265,7 @@ class CLIX:
         self.api.daqClear()
 
     def daq_start(self, arg=0):
+        """starts the data acquisition."""
         self.api.daqStart(arg)
 
     def daq_stop(self):
