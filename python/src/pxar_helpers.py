@@ -422,10 +422,10 @@ def PxarStartup(directory, verbosity, trim=None):
     return api
 
 
-def find_i2cs(config):
+def find_i2cs(config, prnt=True):
     config = config.get('nrocs')
     nrocs = int(config.split()[0])
     i2cs = arange(nrocs, 'u2') if 'i2c' not in config else array(config.split('i2c:')[-1].split(','), 'u2')
-    info('Number of ROCs: {}'.format(nrocs))
-    info('Configured I2Cs: {}'.format(i2cs))
+    info('Number of ROCs: {}'.format(nrocs), prnt=prnt)
+    info('Configured I2Cs: {}'.format(i2cs), prnt=prnt)
     return nrocs, i2cs
