@@ -16,7 +16,7 @@ path.insert(1, join(pxar_dir, 'python', 'src'))
 from draw import *
 from ROOT import TCanvas, TCutG, TMultiGraph, TH1I, TSpectrum
 from argparse import ArgumentParser
-from numpy import mean, delete, argmin
+from numpy import mean, delete, argmin, sign
 from numpy.random import randint
 from time import time, sleep
 from pxar_helpers import *
@@ -60,6 +60,8 @@ class CLIX:
     def __init__(self, conf_dir, verbosity, trim):
         # main
         self.api = PxarStartup(conf_dir, verbosity, trim)
+        self.Config = PxarConfigFile(join(conf_dir, 'configParameters.dat'))
+        self.NRocs, self.I2C = find_i2cs(self.Config, prnt=False)
         self.IsAnalogue = 'dig' not in self.api.getRocType()
         self.Dir = conf_dir
         self.Trim = trim
@@ -79,6 +81,8 @@ class CLIX:
         self.Draw = Draw()
         self.PBar = PBar()
         self.IsRunning = False
+
+        self.get_ia()
 
     def restart_api(self):
         self.api = None
@@ -192,8 +196,9 @@ class CLIX:
         return n_hits
 
     def save_config(self, key, value, name='configParameters'):
-        f_name = join(self.Dir, '{}.dat'.format(name))
+        f_name = join(self.Dir, '{}.dat'.format(name.split('.')[0]))
         with open(f_name, 'r+') as f:
+            value = str(value)
             lines = f.readlines()
             for i, line in enumerate(lines):
                 if key in line:
@@ -204,13 +209,18 @@ class CLIX:
             if not any(key in line for line in lines):
                 lines.append('{} {}\n'.format(key, value))
                 info('adding config setting {} with value {}'.format(key, value))
-            print lines
             f.seek(0)
             f.truncate()
             f.writelines(lines)
 
     def save_tb_config(self, key, value):
         self.save_config(key, value, 'tbParameters')
+
+    def save_dac_config(self, key, value, roc=0):
+        self.save_config(key, value, self.get_dacfile(roc))
+
+    def get_dacfile(self, roc=0):
+        return '{}{}_C{}.dat'.format(self.Config.get('dacParameters'), choose(self.Trim, ''), self.I2C[roc])
     # endregion HELPERS
     # -----------------------------------------
 
@@ -244,14 +254,22 @@ class CLIX:
         self.TBDelays[delay] = value
         self.api.setTestboardDelays(self.TBDelays)
 
-    def get_ia(self):
+    def set_tb_delays(self, dic):
+        for key, value in dic.items():
+            self.set_tb_delay(key, value)
+
+    def read_ia(self, t=.05):
+        sleep(t)
+        return self.api.getTBia()
+
+    def get_ia(self, vana=None, n=5, prnt=True):
         """:returns: the analogue current consumption of the testboard."""
+        if vana is not None:
+            self.set_dac('vana', vana)
         self.api.getTBia()  # first reading is always wrong
-        values = []
-        for i in xrange(10):
-            values.append(self.api.getTBia())
-            sleep(.05)
-        print 'Analog Current: {:2.2f} mA'.format(mean(values) * 1000)
+        current = mean([self.read_ia() for _ in range(n)]) * 1000  # to mA
+        info('analogue current: {:.2f} mA'.format(current), prnt=prnt)
+        return current if not prnt else None
 
     def get_n_rocs(self):
         """:returns: the number of enabled ROCs."""
@@ -832,14 +850,15 @@ class CLIX:
 
     def find_tb_delays(self):
         """findAnalogueTBDelays: configures tindelay and toutdelay"""
-        self.api.setTestboardDelays({'tindelay': 0, 'toutdelay': 20})
+        self.set_tb_delays({'tindelay': 0, 'toutdelay': 20})
         self.enable_all()
         self.api.maskAllPixels(1)
         self.cycle_tb()  # first reading may be bad
         data = self.get_raw_event()
+        print(data)
         tin = argmin(data)
         tout = 20 - (data.size - tin - 3 * self.api.getNRocs())
-        self.api.setTestboardDelays({'tindelay': tin, 'toutdelay': tout})
+        self.set_tb_delays({'tindelay': tin, 'toutdelay': tout})
         self.save_tb_config('tindelay', tin)
         self.save_tb_config('toutdelay', tout)
         self.api.maskAllPixels(0)
@@ -921,6 +940,13 @@ class CLIX:
         g = self.Draw.make_tgrapherrors('gsc', 'S-Curve for Pixel {} {}'.format(col, row), x=arange(256), y=efficiencies)
         format_histo(g, x_tit='VCAL', y_tit='Efficiency [%]', y_off=1.3)
         self.Draw.draw_histo(g, draw_opt='ap', lm=.12)
+
+    def find_vana(self, target=24, vana=120, step=60):
+        c = self.get_ia(vana, prnt=False)
+        if abs(c - target) < .2 or step == 1:
+            info('analogue current: {:.1f} mA'.format(c))
+            return self.save_dac_config('vana', vana)
+        return self.find_vana(target, vana + step // 2 * int(sign(target - c)), step // 2)
 
 
 if __name__ == '__main__':
