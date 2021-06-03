@@ -3,13 +3,18 @@
 # created on June 19th 2018 by M. Reichmann (remichae@phys.ethz.ch)
 # --------------------------------------------------------
 
-from os.path import isfile, exists
+from os.path import isfile, exists, dirname, realpath
 from os import makedirs, _exit
-from ConfigParser import ConfigParser
+from pickle import loads
+from ConfigParser import ConfigParser, NoSectionError, NoOptionError
 from datetime import datetime
+from time import time
 from ROOT import TFile, gROOT
-from numpy import average, sqrt, array
-from progressbar import Bar, ETA, FileTransferSpeed, Percentage, ProgressBar
+from numpy import average, sqrt, array, count_nonzero, zeros, full
+from progressbar import Bar, ETA, FileTransferSpeed, Percentage, ProgressBar, Widget, SimpleProgress
+from uncertainties import ufloat
+from uncertainties.core import Variable, AffineScalarFunc
+from functools import wraps
 
 
 type_dict = {'int32': 'I',
@@ -34,10 +39,17 @@ def get_t_str():
 def info(msg, overlay=False, prnt=True):
     if prnt:
         print '{ov}{head} {t} --> {msg}'.format(t=get_t_str(), msg=msg, head='{}INFO:{}'.format(GREEN, ENDC), ov='\033[1A\r' if overlay else '')
+    return time()
 
 
-def warning(msg):
-    print '{head} {t} --> {msg}'.format(t=get_t_str(), msg=msg, head='{}WARNING:{}'.format(YELLOW, ENDC))
+def add_to_info(t, msg='Done', prnt=True):
+    if prnt:
+        print('{m} ({t:2.2f} s)'.format(m=msg, t=time() - t))
+
+
+def warning(msg, prnt=True):
+    if prnt:
+        print('{head} {t} --> {msg}'.format(t=get_t_str(), msg=msg, head='{}WARNING:{}'.format(YELLOW, ENDC)))
 
 
 def critical(msg):
@@ -45,12 +57,29 @@ def critical(msg):
     _exit(1)
 
 
+def print_elapsed_time(start, what='This'):
+    print('Elapsed time for {w}: {t}'.format(t=get_elapsed_time(start), w=what))
+
+
+def get_elapsed_time(start):
+    t = datetime.fromtimestamp(time() - start)
+    return '{}.{:02.0f}'.format(t.strftime('%M:%S'), t.microsecond / 10000)
+
+
 def file_exists(filename):
     return isfile(filename)
 
 
-def round_down_to(num, val):
-    return int(num) / val * val
+def round_down_to(num, val=1):
+    return int(num) // val * val
+
+
+def round_up_to(num, val=1):
+    return int(num) // val * val + val
+
+
+def get_base_dir():
+    return dirname(dirname(realpath(__file__)))
 
 
 def ensure_dir(path):
@@ -77,6 +106,28 @@ def choose(v, default, decider='None', *args, **kwargs):
 def make_list(value, dtype=None):
     v = array([choose(value, [])]).flatten()
     return v.tolist() if dtype == list else v.astype(dtype) if dtype is not None else v
+
+
+def is_iter(v):
+    try:
+        iter(v)
+        return True
+    except TypeError:
+        return False
+
+
+def is_ufloat(value):
+    return type(value) in [Variable, AffineScalarFunc]
+
+
+def make_ufloat(n, s=0):
+    if is_iter(n):
+        return array([ufloat(*v) for v in array([n, s]).T])
+    return n if is_ufloat(n) else ufloat(n, s)
+
+
+def uarr2n(arr):
+    return array([i.n for i in arr]) if is_ufloat(arr[0]) else arr
 
 
 def print_banner(msg, symbol='=', new_lines=True):
@@ -130,14 +181,22 @@ def bit_shift(value, shift):
     return (value >> shift) & 0b0111
 
 
-def mean_sigma(values, weights=None):
+def mean_sigma(values, weights=None, err=True):
     """ Return the weighted average and standard deviation. values, weights -- Numpy ndarrays with the same shape. """
-    weights = [1] * len(values) if weights is None else weights
+    if len(values) == 1:
+        value = make_ufloat(values[0])
+        return (value, ufloat(value.s, 0)) if err else (value.n, value.s)
+    weights = full(len(values), 1) if weights is None else weights
+    if is_ufloat(values[0]):
+        errors = array([v.s for v in values])
+        weights = full(errors.size, 1) if all(errors == errors[0]) else [1 / e if e else 0 for e in errors]
+        values = array([v.n for v in values], 'd')
     if all(weight == 0 for weight in weights):
         return [0, 0]
     avrg = average(values, weights=weights)
-    variance = average((values - avrg) ** 2, weights=weights)  # Fast and numerically precise
-    return avrg, sqrt(variance)
+    sigma = sqrt(average((values - avrg) ** 2, weights=weights))  # Fast and numerically precise
+    m, s = ufloat(avrg, sigma / (sqrt(len(values)) - 1)), ufloat(sigma, sigma / sqrt(2 * len(values)))
+    return (m, s) if err else (m.n, s.n)
 
 
 def set_root_warnings(status):
@@ -157,17 +216,114 @@ def remove_digits(string):
     return filter(lambda x: not x.isdigit(), string)
 
 
-class PBar:
-    def __init__(self):
+def calc_eff(k=0, n=0, values=None):
+    values = array(values) if values is not None else None
+    if n == 0 and (values is None or not values.size):
+        return zeros(3)
+    k = float(k if values is None else count_nonzero(values))
+    n = float(n if values is None else values.size)
+    m = (k + 1) / (n + 2)
+    mode = k / n
+    s = sqrt(((k + 1) / (n + 2) * (k + 2) / (n + 3) - ((k + 1) ** 2) / ((n + 2) ** 2)))
+    return array([mode, max(s + (mode - m), 0), max(s - (mode - m), 0)]) * 100
+
+
+# ----------------------------------------
+# region CLASSES
+class PBar(object):
+    def __init__(self, start=None, counter=False, t=None):
         self.PBar = None
-        self.Widgets = ['Progress: ', Percentage(), ' ', Bar(marker='>'), ' ', ETA(), ' ', FileTransferSpeed()]
-        self.LastUpdate = 0
+        self.Widgets = self.init_widgets(counter, t)
+        self.Step = 0
+        self.N = 0
+        self.start(start)
 
-    def start(self, n):
-        self.PBar = ProgressBar(widgets=self.Widgets, maxval=n).start()
+    def __reduce__(self):
+        return self.__class__, (None, False, None), (self.Widgets, self.Step, self.N)
 
-    def update(self, i):
-        self.finish() if i >= self.PBar.maxval - 1 else self.PBar.update(i + 1)
+    def __setstate__(self, state):
+        self.Widgets, self.Step, self.N = state
+        if self.N:
+            self.PBar = ProgressBar(widgets=self.Widgets, maxval=self.N).start()
+            self.update(self.Step) if self.Step > 0 else do_nothing()
+
+    @staticmethod
+    def init_widgets(counter, t):
+        return ['Progress: ', SimpleProgress('/') if counter else Percentage(), ' ', Bar(marker='>'), ' ', ETA(), ' ', FileTransferSpeed() if t is None else EventSpeed(t)]
+
+    def start(self, n, counter=None, t=None):
+        if n is not None:
+            self.Step = 0
+            self.PBar = ProgressBar(widgets=self.Widgets if t is None and counter is None else self.init_widgets(counter, t), maxval=n).start()
+            self.N = n
+
+    def update(self, i=None):
+        i = self.Step if i is None else i
+        if i >= self.PBar.maxval:
+            return
+        self.PBar.update(i + 1)
+        self.Step += 1
+        if i == self.PBar.maxval - 1:
+            self.finish()
 
     def finish(self):
         self.PBar.finish()
+
+    def is_finished(self):
+        return self.PBar.currval == self.N
+
+
+class EventSpeed(Widget):
+    """Widget for showing the event speed (useful for slow updates)."""
+
+    def __init__(self, t='s'):
+        self.unit = t
+        self.factor = {'s': 1, 'min': 60, 'h': 60 * 60}[t]
+
+    def update(self, pbar):
+        value = 0
+        if pbar.seconds_elapsed > 2e-6 and pbar.currval > 2e-6:
+            value = pbar.currval / pbar.seconds_elapsed * self.factor
+        return '{:4.1f} E/{}'.format(value, self.unit)
+
+
+def update_pbar(func):
+    @wraps(func)
+    def my_func(*args, **kwargs):
+        if args[0].PBar is not None and args[0].PBar.PBar is not None and not args[0].PBar.is_finished():
+            args[0].PBar.update()
+        return func(*args, **kwargs)
+    return my_func
+
+
+class Config(ConfigParser):
+
+    def __init__(self, file_name, **kwargs):
+        ConfigParser.__init__(self, **kwargs)
+        self.FileName = file_name
+        self.read(file_name)
+
+    def get_value(self, section, option, dtype=str, default=None):
+        dtype = type(default) if default is not None else dtype
+        try:
+            if dtype is bool:
+                return self.getboolean(section, option)
+            v = self.get(section, option)
+            return loads(v) if dtype == list or '[' in v and dtype is not str else dtype(v)
+        except (NoOptionError, NoSectionError):
+            return default
+
+    def get_values(self, section):
+        return [j for i, j in self.items(section)]
+
+    def get_list(self, section, option, default=None):
+        return self.get_value(section, option, list, choose(default, []))
+
+    def show(self):
+        for key, section in self.items():
+            print('[{}]'.format(key))
+            for option in section:
+                print('{} = {}'.format(option, self.get(key, option)))
+            print()
+# endregion CLASSES
+# ----------------------------------------
