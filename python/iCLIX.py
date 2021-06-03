@@ -251,17 +251,18 @@ class CLIX:
             return
         return delays[name]
 
-    def set_tb_delay(self, delay, value):
+    def set_tb_delay(self, delay, value, prnt=False):
         """sets the value of the DAC [dac] to [value]. """
         if delay not in self.DacDict.getAllDTBNames():
             print 'The delay {} does not exist'.format(delay)
             return
+        info(('setting {} to {}' if value != self.TBDelays[delay] else 'keeping previous {} of {}').format(delay, value), prnt=prnt)
         self.TBDelays[delay] = value
         self.api.setTestboardDelays(self.TBDelays)
 
-    def set_tb_delays(self, dic):
+    def set_tb_delays(self, dic, prnt=False):
         for key, value in dic.items():
-            self.set_tb_delay(key, value)
+            self.set_tb_delay(key, value, prnt)
 
     def read_ia(self, t=.05):
         sleep(t)
@@ -411,12 +412,13 @@ class CLIX:
         return self.api.SignalProbe(probe, sig)
 
     @update_pbar
-    def set_clock(self, value):
+    def set_clock(self, value, prnt=False):
         """sets all the delays to the right value if you want to change clk"""
         self.set_tb_delay('clk', value)
         self.set_tb_delay('ctr', value)
         self.set_tb_delay('sda', value + (15 if 'dig' in self.api.getRocType() else 11))
         self.set_tb_delay('tin', value + (5 if 'dig' in self.api.getRocType() else 2))
+        info(('set clk delay to {}' if value != self.TBDelays['clk'] else 'keeping previous clk delay of {}').format(value), prnt=prnt)
 
     def set_external_clock(self, status=True):
         """setExternalClock [status]: enables the external DTB clock input, switches off the internal clock. Only switches if external clock is present."""
@@ -566,6 +568,8 @@ class CLIX:
         if not count:
             x, y = [array(arr).repeat(zz) for arr in [x, y]]
         binning = make_bins(0, 417 if is_module else 52) + make_bins(0, 161 if is_module else 80)
+        if not len(x):
+            return warning('empty data ... there is nothing to show')
         self.Draw.histo_2d(x, y, binning, title, x_tit='col', y_tit='row', stats=stats, z_range=[0, max(zz)])
         self.draw_module_grid(is_module)
 
@@ -819,7 +823,7 @@ class CLIX:
         data = mean(self.get_raw_data(), axis=0)
         tin = argmin(data)
         tout = 20 - (data.size - tin - 3 * self.NRocs)
-        self.set_tb_delays({'tindelay': tin, 'toutdelay': tout})
+        self.set_tb_delays({'tindelay': tin, 'toutdelay': tout}, prnt=True)
         self.save_tb_delays()
         self.api.maskAllPixels(0)
 
@@ -857,7 +861,7 @@ class CLIX:
         x, ub, b, ld = x[ub != 0], ub[ub != 0], b[ub != 0], ld[ub != 0]
         # clk_b = x[argmin(abs(b))]
         # self.Draw.multigraph([self.Draw.graph(x, y, show=False) for y in [ub, b, ld]], 'clk scan', ['ub', 'b', 'ld'])
-        self.set_clock(int(round(mean([x[argmax(ld)], mean(x[where(ub < min(ub) + 5)])]))))
+        self.set_clock(int(round(mean([x[argmax(ld)], mean(x[where(ub < min(ub) + 5)])]))), prnt=True)
         self.set_tb_delays({'tindelay': tin, 'toutdelay': tout})
         self.save_tb_delays()
 
@@ -869,14 +873,14 @@ class CLIX:
         for i in range(self.NRocs):
             self.set_dac('vana', values[i], i)
 
-    def _find_vana(self, target=24, vana=120, step=60, roc=0):
+    def _find_vana(self, target=24, vana=120, step=60, count=0, roc=0):
         self.set_dac('vana', vana, roc)
         c = self.get_ia(prnt=False)
-        if abs(c - target) < .2:
-            info('analogue current: {:.1f} mA'.format(c))
+        if abs(c - target) < .2 + .1 * count:
+            info('set vana to {}, analogue current: {:.1f} mA'.format(vana, c))
             self.save_dac_parameters(roc)
             return vana
-        return self._find_vana(target, vana + step // 2 * int(sign(target - c)), max(step // 2, 1))
+        return self._find_vana(target, vana + step // 2 * int(sign(target - c)), max(step // 2, 1), count + 1 if step == 1 else 0, roc)
 
     def draw_address_levels(self, n_trigger=1000, **kwargs):
         x = self.get_address_levels(n_trigger).flatten()
@@ -927,4 +931,4 @@ if __name__ == '__main__':
     ev = z.get_event
     raw = z.daq_get_raw_event
     dt = z.daq_trigger
-    # sd = z.api.setDAC
+    set_dac = z.set_dac
