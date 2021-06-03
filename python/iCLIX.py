@@ -499,7 +499,8 @@ class CLIX:
 
     def get_header(self, n_trigger=1000):
         data = self.get_raw_data(n_trigger)
-        return data[:, argmin(data[0]):argmin(data[0]) + 3] if len(data.shape) == 2 else zeros((1, 3))  # take only header
+        i = min(argsort(data[0])[:self.NRocs])
+        return data[:, i:i + 3 * self.NRocs] if len(data.shape) == 2 else zeros((1, 3))  # take only header
 
     def get_mean_address_levels(self, n_trigger=1000):
         return mean(self.get_address_levels(n_trigger), axis=0)
@@ -553,7 +554,7 @@ class CLIX:
         read_back = sum(px.value for px in data)
         total = n_trig * (unmasked if unmasked < active else active)
         eff = 100. * read_back / total
-        print 'Efficiency: {eff:6.2f}% ({rb:5d}/{tot:5d})'.format(eff=eff, rb=int(read_back), tot=total)
+        print 'Efficiency: {:6.2f}% ({:5d}/{:5d})'.format(eff, int(read_back), total)
         return eff
 
     def plot_map(self, data, title, count=False, stats=True):
@@ -807,6 +808,8 @@ class CLIX:
         BREAK = False
 
     def setup_analogue(self, target_ia=24):
+        info('checking if ROCs are programmable ...')
+        self.check_programmable()
         info('adjusting vana to target {} mA ...'.format(target_ia))
         self.find_vana(target_ia)
         info('adjusting clock delays ...')
@@ -823,11 +826,20 @@ class CLIX:
         self.enable_all()
         self.api.maskAllPixels(1)
         data = mean(self.get_raw_data(), axis=0)
-        tin = argmin(data)
+        tin = min(argsort(data)[:self.NRocs])
         tout = 20 - (data.size - tin - 3 * self.NRocs)
         self.set_tb_delays({'tindelay': tin, 'toutdelay': tout}, prnt=True)
         self.save_tb_delays()
         self.api.maskAllPixels(0)
+
+    def check_programmable(self):
+        for roc in range(self.NRocs):
+            self.set_dac('vana', 0)
+            c0 = self.get_ia(prnt=False)
+            self.set_dac('vana', 100, roc)
+            if abs(self.get_ia(prnt=False) - c0) < 5:
+                critical('ROC {} with I2C {} is not programmable!'.format(roc, self.I2C[roc]))
+        info('all ROCs are nicely programmable :-)')
 
     def find_offsets(self, n_trig=1000):
         b_off, l1_off, alpha = [], [], []
@@ -853,18 +865,22 @@ class CLIX:
         self.save_config('alphas',  '[{}]'.format(','.join('{:1.2f}'.format(v) for v in alpha)))
         self.enable_all()
 
-    def find_clk_delay(self, xmin=0, xmax=20):
-        # todo: extend for several rocs
-        tin, tout = [self.TBDelays[i] for i in ['tindelay', 'toutdelay']]
-        self.set_tb_delays({'tindelay': 0, 'toutdelay': 20})
-        x = arange(xmin, xmax)
-        self.PBar.start(x.size, counter=True)
-        ub, b, ld = array([self.get_mean_header(clk) for clk in x]).T
-        x, ub, b, ld = x[ub != 0], ub[ub != 0], b[ub != 0], ld[ub != 0]
-        # clk_b = x[argmin(abs(b))]
-        # self.Draw.multigraph([self.Draw.graph(x, y, show=False) for y in [ub, b, ld]], 'clk scan', ['ub', 'b', 'ld'])
-        self.set_clock(int(round(mean([x[argmax(ld)], mean(x[where(ub < min(ub) + 5)])]))), prnt=True)
-        self.set_tb_delays({'tindelay': tin, 'toutdelay': tout})
+    def find_clk_delay(self, xmin=0, xmax=20, show=False):
+        old = self.set_tb_delays({'tindelay': 0, 'toutdelay': 20})
+        self.PBar.start(xmax - xmin, counter=True)
+        data = array([self.get_mean_header(clk) for clk in arange(xmin, xmax)]).T
+        clk = []
+        for roc in range(self.NRocs):
+            x, (ub, b, ld) = arange(xmin, xmax), data[arange(3) + 3 * roc]
+            x, ub, b, ld = x[ub != 0], ub[ub != 0], b[ub != 0], ld[ub != 0]
+            # clk_b = x[argmin(abs(b))]
+            if show:
+                self.Draw.multigraph([self.Draw.graph(x, y, show=False) for y in [ub, b, ld]], 'CLK Scan Roc {}'.format(roc), ['ub', 'b', 'ld'])
+            clk.append(mean([x[argmax(ld)], mean(x[where(ub < min(ub) + 5)])]))
+        if self.NRocs > 1:
+            info('found individual clks: [{}]'.format(', '.join('{:.2f}'.format(i) for i in clk)))
+        self.set_clock(int(round(mean(clk))), prnt=True)
+        self.set_tb_delays(old)
         self.save_tb_delays()
 
     def find_vana(self, target=24, xmin=60, xmax=180):
@@ -879,7 +895,7 @@ class CLIX:
         self.set_dac('vana', vana, roc)
         c = self.get_ia(prnt=False)
         if abs(c - target) < .2 + .1 * count:
-            info('set vana to {}, analogue current: {:.1f} mA'.format(vana, c))
+            info('set vana of ROC {} to {}, analogue current: {:.1f} mA'.format(roc, vana, c))
             self.save_dac_parameters(roc)
             return vana
         return self._find_vana(target, vana + step // 2 * int(sign(target - c)), max(step // 2, 1), count + 1 if step == 1 else 0, roc)
