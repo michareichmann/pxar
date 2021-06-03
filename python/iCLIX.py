@@ -14,7 +14,7 @@ path.insert(1, join(pxar_dir, 'lib'))
 path.insert(1, join(pxar_dir, 'python', 'src'))
 
 from argparse import ArgumentParser
-from numpy import delete, argmin, sign, argmax, genfromtxt
+from numpy import delete, sign, argmax, genfromtxt, argsort
 from numpy.random import randint
 from time import sleep
 from pxar_helpers import *
@@ -24,10 +24,13 @@ from json import dumps
 from threading import Thread
 import atexit
 from draw import *
+import signal
+
 
 BREAK = False
 z = None
-import signal
+
+
 def signal_handler(signal, frame):
     global BREAK, z
     print("\nprogram exiting gracefully")
@@ -193,7 +196,7 @@ class CLIX:
         data = genfromtxt(filename, dtype=['i', 'U30', 'i'])
         for i, (_, key, value) in enumerate(data):
             if key in current and current[key] != value:
-                info('overwriting {} from {} -> {}'.format(key, value, current[key]))
+                info('{}: overwriting {} from {} -> {}'.format(basename(filename), key, value, current[key]))
                 data[i][-1] = current[key]
         s = [max(len(str(i)) for i in data[a]) for a in ['f0', 'f1', 'f2']]
         with open(filename, 'r+') as f:
@@ -206,23 +209,19 @@ class CLIX:
     def save_dac_parameters(self, roc_id=0, trim=None):
         self.save_parameters(self.get_dacfile(roc_id, trim), self.api.getRocDACs(roc_id))
 
-    def save_config(self, key, value, name='configParameters'):
-        f_name = join(self.Dir, '{}.dat'.format(name.split('.')[0]))
-        with open(f_name, 'r+') as f:
-            value = str(value)
+    def save_config(self, key, value):
+        with open(join(self.Dir, 'configParameters.dat'), 'r+') as f:
             lines = f.readlines()
-            for i, line in enumerate(lines):
-                if key in line:
-                    old = line[line.find(key) + len(key):]
-                    rsize = len(old) - 1 if abs(len(value) - len(old.strip())) < 3 else len(value) + 1  # -1 for \n
-                    lines[i] = line.replace(old, value.rjust(rsize)) + '\n'
-                    info('changing existing config setting of {} from {} to {}'.format(key, ' '.join(line.split()[1:]), value))
-            if not any(key in line for line in lines):
+            dic = {line.split()[0]: [line.split()[1], i] for i, line in enumerate(lines) if len(line) > 3 and line[0] not in ['#', ' ', '-']}
+            if key in dic and dic[key][0] != value:
+                info('configParameters.dat: overwriting {} from {} -> {}'.format(key, dic[key][0], value))
+                lines[dic[key][1]] = '{} {}\n'.format(key, value)
+            if key not in dic:
+                info('configParameters.dat: adding {} with value {}'.format(key, value))
                 lines.append('{} {}\n'.format(key, value))
-                info('adding config setting {} with value {}'.format(key, value))
             f.seek(0)
-            f.truncate()
             f.writelines(lines)
+            f.truncate()
 
     def get_dacfile(self, roc_id=0, trim=None):
         return '{}{}_C{}.dat'.format(self.Config.get('dacParameters'), choose(choose(trim, self.Trim), ''), self.I2C[roc_id])
@@ -231,13 +230,15 @@ class CLIX:
 
     # -----------------------------------------
     # region API
-    def get_dac(self, dac, roc_id=0):
+    def get_dac(self, dac, roc_id=None):
         """:returns: the current value of the DAC [dac] of the ROC with id [roc_id]. """
+        if roc_id is None:
+            return [self.get_dac(dac, roc) for roc in range(self.NRocs)]
         dacs = self.api.getRocDACs(roc_id)
         if dac in dacs:
             return dacs[dac]
         else:
-            print 'Unknown dac {d}!'.format(d=dac)
+            print 'Unknown DAC name: {d}!'.format(d=dac)
 
     def set_dac(self, name, value, roc_id=None):
         """sets the value of the DAC [dac] with ROC ID [roc_id] to [value]. """
@@ -252,17 +253,18 @@ class CLIX:
         return delays[name]
 
     def set_tb_delay(self, delay, value, prnt=False):
-        """sets the value of the DAC [dac] to [value]. """
+        """sets the value of the DAC [dac] to [value]. :returns: old value"""
         if delay not in self.DacDict.getAllDTBNames():
             print 'The delay {} does not exist'.format(delay)
             return
         info(('setting {} to {}' if value != self.TBDelays[delay] else 'keeping previous {} of {}').format(delay, value), prnt=prnt)
+        old = self.TBDelays[delay]
         self.TBDelays[delay] = value
         self.api.setTestboardDelays(self.TBDelays)
+        return delay, old
 
     def set_tb_delays(self, dic, prnt=False):
-        for key, value in dic.items():
-            self.set_tb_delay(key, value, prnt)
+        return dict([self.set_tb_delay(key, value, prnt) for key, value in dic.items()])
 
     def read_ia(self, t=.05):
         sleep(t)
