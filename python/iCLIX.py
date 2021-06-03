@@ -13,19 +13,17 @@ pxar_dir = dirname(dirname(realpath(__file__)))
 path.insert(1, join(pxar_dir, 'lib'))
 path.insert(1, join(pxar_dir, 'python', 'src'))
 
-from draw import *
-from ROOT import TCanvas, TCutG, TMultiGraph, TH1I, TSpectrum
 from argparse import ArgumentParser
-from numpy import mean, delete, argmin, sign
+from numpy import delete, argmin, sign, argmax, genfromtxt
 from numpy.random import randint
-from time import time, sleep
+from time import sleep
 from pxar_helpers import *
-from pxar_plotter import Plotter
 from TreeWriterLjubljana import TreeWriterLjubljana
 from hdf5_writer import HDF5Writer
 from json import dumps
 from threading import Thread
 import atexit
+from draw import *
 
 BREAK = False
 z = None
@@ -72,12 +70,7 @@ class CLIX:
         self.ProbeDict = PyProbeDictionary()
         self.TBDelays = self.api.getTestboardDelays()
 
-        self.window = None
-        self.Plots = []
-        self.NRows = 80
-        self.NCols = 52
-        set_palette(custom=True)
-        self.Plotter = Plotter()
+        self.NCols, self.NRows = 52, 80
         self.Draw = Draw()
         self.PBar = PBar()
         self.IsRunning = False
@@ -195,6 +188,24 @@ class CLIX:
                 break
         return n_hits
 
+    @staticmethod
+    def save_parameters(filename, current):
+        data = genfromtxt(filename, dtype=['i', 'U30', 'i'])
+        for i, (_, key, value) in enumerate(data):
+            if key in current and current[key] != value:
+                info('overwriting {} from {} -> {}'.format(key, value, current[key]))
+                data[i][-1] = current[key]
+        s = [max(len(str(i)) for i in data[a]) for a in ['f0', 'f1', 'f2']]
+        with open(filename, 'r+') as f:
+            f.writelines(['{0:>{3}}  {1:>{4}}  {2:>{5}}\n'.format(*list(tup) + s) for tup in data])
+            f.truncate()
+
+    def save_tb_delays(self):
+        return self.save_parameters(self.Config.get('tbParameters'), self.TBDelays)
+
+    def save_dac_parameters(self, roc_id=0, trim=None):
+        self.save_parameters(self.get_dacfile(roc_id, trim), self.api.getRocDACs(roc_id))
+
     def save_config(self, key, value, name='configParameters'):
         f_name = join(self.Dir, '{}.dat'.format(name.split('.')[0]))
         with open(f_name, 'r+') as f:
@@ -213,14 +224,8 @@ class CLIX:
             f.truncate()
             f.writelines(lines)
 
-    def save_tb_config(self, key, value):
-        self.save_config(key, value, 'tbParameters')
-
-    def save_dac_config(self, key, value, roc=0):
-        self.save_config(key, value, self.get_dacfile(roc))
-
-    def get_dacfile(self, roc=0):
-        return '{}{}_C{}.dat'.format(self.Config.get('dacParameters'), choose(self.Trim, ''), self.I2C[roc])
+    def get_dacfile(self, roc_id=0, trim=None):
+        return '{}{}_C{}.dat'.format(self.Config.get('dacParameters'), choose(choose(trim, self.Trim), ''), self.I2C[roc_id])
     # endregion HELPERS
     # -----------------------------------------
 
@@ -262,10 +267,8 @@ class CLIX:
         sleep(t)
         return self.api.getTBia()
 
-    def get_ia(self, vana=None, n=5, prnt=True):
+    def get_ia(self, n=5, prnt=True):
         """:returns: the analogue current consumption of the testboard."""
-        if vana is not None:
-            self.set_dac('vana', vana)
         self.api.getTBia()  # first reading is always wrong
         current = mean([self.read_ia() for _ in range(n)]) * 1000  # to mA
         info('analogue current: {:.2f} mA'.format(current), prnt=prnt)
@@ -309,7 +312,7 @@ class CLIX:
             self.PBar.LastUpdate = t
         return t < t_max * 60 if n_max is None else n < n_max
 
-    def get_data(self, wbc, t, n=None, random_trig=False):
+    def take_data(self, wbc, t, n=None, random_trig=False):
         self.api.HVon()
         if random_trig:
             self.set_pg(cal=False, res=False, delay=20)
@@ -407,6 +410,7 @@ class CLIX:
             return
         return self.api.SignalProbe(probe, sig)
 
+    @update_pbar
     def set_clock(self, value):
         """sets all the delays to the right value if you want to change clk"""
         self.set_tb_delay('clk', value)
@@ -477,19 +481,29 @@ class CLIX:
         t.setDaemon(True)
         t.start()
 
-    def get_address_levels(self, n_trigger=1000, data=None):
-        h = TH1I('hal', 'Analogue Adress Levels', 1024, -512, 511)
-        if data is None:
-            self.send_triggers(n_trigger)
-            data = self.get_raw_buffer()
-        try:
-            data = data[:, 3:]  # remove the ROC header
-            data = delete(data, range(5, data.shape[1], 6), axis=1)  # remove every sixth column (ph)
-            [h.Fill(lvl) for event in data for lvl in event]
-            return h
-        except IndexError:
-            return
+    def get_raw_data(self, n_trigger=1000):
+        self.send_triggers(n_trigger)
+        return self.get_raw_buffer()
 
+    def get_data(self, n_trigger=1000):
+        self.send_triggers(n_trigger)
+        return self.api.daqGetEventBuffer()
+
+    def get_address_levels(self, n_trigger=1000):
+        data = self.get_raw_data(n_trigger)[:, 3:]  # remove the ROC header
+        return delete(data, range(5, data.shape[1], 6), axis=1)  # remove every sixth column (ph)
+
+    def get_header(self, n_trigger=1000):
+        data = self.get_raw_data(n_trigger)
+        return data[:, argmin(data[0]):argmin(data[0]) + 3] if len(data.shape) == 2 else zeros((1, 3))  # take only header
+
+    def get_mean_address_levels(self, n_trigger=1000):
+        return mean(self.get_address_levels(n_trigger), axis=0)
+
+    def get_mean_header(self, clk=None, n_trigger=1000):
+        if clk is not None:
+            self.set_clock(clk)
+        return mean(self.get_header(n_trigger), axis=0)
     # endregion DAQ
     # -----------------------------------------
 
@@ -524,10 +538,11 @@ class CLIX:
         """enableAllPixel [roc]: enables and unmasks all Pixels of [roc]"""
         self.api.maskAllPixels(0, roc)
         self.api.testAllPixels(1, roc)
-    # endregion
+    # endregion MASK // ENABLE
+    # -----------------------------------------
 
     # -----------------------------------------
-    # region plotting
+    # region PLOTTING
     def print_eff(self, data, n_trig):
         unmasked = 4160 * self.get_n_rocs() - self.api.getNMaskedPixels()
         active = self.api.getNEnabledPixels()
@@ -537,63 +552,33 @@ class CLIX:
         print 'Efficiency: {eff:6.2f}% ({rb:5d}/{tot:5d})'.format(eff=eff, rb=int(read_back), tot=total)
         return eff
 
-    def plot_graph(self, gr, lm=.12, rm=.1, draw_opt='alp'):
-        c = TCanvas('c', 'c', 1000, 1000)
-        c.SetMargin(lm, rm, .1, .1)
-        gr.Draw(draw_opt)
-        self.window = c
-        self.Plots.append(gr)
-        self.window.Update()
-
-    def plot_map(self, data, name, count=False, no_stats=False):
-        c = TCanvas('c', 'c', 1000, 1000)
-        c.SetRightMargin(.12)
-
-        # Find number of ROCs present:
-        is_module = self.api.getNRocs() > 1
+    def plot_map(self, data, title, count=False, stats=True):
+        is_module = self.NRocs > 1
         proc = 'proc' in self.api.getRocType()
-        # Prepare new numpy matrix:
-        d = zeros((417 if is_module else 52, 161 if is_module else 80))
+        x, y, zz = [], [], []  # Prepare new numpy matrix:
         for px in data:
             roc = (px.roc - 12) % 16 if proc else px.roc
             xoffset = 52 * (roc % 8) if is_module else 0
             yoffset = 80 * int(roc / 8) if is_module else 0
-
-            # Flip the ROCs upside down:
-            y = (px.row + yoffset) if (roc < 8) else (2 * yoffset - px.row - 1)
-            # Reverse order of the upper ROC row:
-            x = (px.column + xoffset) if (roc < 8) else (415 - xoffset - px.column)
-            d[x][y] += 1 if count else px.value
-
-        plot = Plotter.create_th2(d, 0, 417 if is_module else 52, 0, 161 if is_module else 80, name, 'pixels x', 'pixels y', name)
-        if no_stats:
-            plot.SetStats(0)
-        plot.Draw('COLZ')
-        # draw margins of the ROCs for the module
+            y.append(px.row + yoffset if roc < 8 else 2 * yoffset - px.row - 1)  # Flip the ROCs upside down:
+            x.append(px.column + xoffset if roc < 8 else 415 - xoffset - px.column)  # Reverse order of the upper ROC row:
+            zz.append(px.value)
+        if not count:
+            x, y = [array(arr).repeat(zz) for arr in [x, y]]
+        binning = make_bins(0, 417 if is_module else 52) + make_bins(0, 161 if is_module else 80)
+        self.Draw.histo_2d(x, y, binning, title, x_tit='col', y_tit='row', stats=stats, z_range=[0, max(zz)])
         self.draw_module_grid(is_module)
-        self.window = c
-        self.Plots.append(plot)
-        self.window.Update()
 
     def draw_module_grid(self, draw):
-        if not draw:
-            return
-        for i in xrange(2):
-            for j in xrange(8):
-                rows, cols = self.NRows, self.NCols
-                x = array([cols * j, cols * (j + 1), cols * (j + 1), cols * j, cols * j], 'd')
-                y = array([rows * i, rows * i, rows * (i + 1), rows * (i + 1), rows * i], 'd')
-                cut = TCutG('r{n}'.format(n=j + (j * i)), 5, x, y)
-                cut.SetLineColor(1)
-                cut.SetLineWidth(1)
-                self.Plots.append(cut)
-                cut.Draw('same')
-    # endregion
+        if draw:
+            return [self.Draw.box(self.NCols * j, self.NRows * i, self.NCols * (j + 1), self.NRows * (i + 1)) for i in range(2) for j in range(8)]
+    # endregion PLOTTING
+    # -----------------------------------------
 
     def get_efficiency_map(self, flags=0, n_triggers=10):
         data = self.api.getEfficiencyMap(flags, n_triggers)
         self.print_eff(data, n_triggers)
-        self.plot_map(data, 'Efficiency', no_stats=True)
+        self.plot_map(data, 'Efficiency Map', stats=False)
 
     def clk_scan(self, exclude=None):
         """ scanning digital clk and deser phases """
@@ -645,19 +630,12 @@ class CLIX:
             print '{:2d}:'.format(clk), self.daq_get_raw_event()
         self.daq_stop()
 
-    def do_adc_disto(self, vcal=50, col=14, row=14, high=False, n_trig=10000):
+    def draw_adc_disto(self, vcal=50, col=14, row=14, high=False, n_trig=10000):
         self.api.setDAC('ctrlreg', 4 if high else 0)
         self.api.setDAC('vcal', vcal)
-        self.api.daqStart()
-        self.api.daqTrigger(n_trig, 500)
         self.enable_single_pixel(col, row)
-        data = self.api.daqGetEventBuffer()
-        self.api.daqStop()
-        adcs = [px.value for evt in data for px in evt.pixels]
-        h = TH1I('h_adc', 'ACD Distribution for vcal {v} in {h} Range'.format(v=vcal, h='high' if high else 'low'), 255, 0, 255)
-        for adc in adcs:
-            h.Fill(adc)
-        self.plot_graph(h, draw_opt='')
+        x = [px.value for evt in self.get_data(n_trig) for px in evt.pixels]
+        self.Draw.distribution(x, make_bins(-256, 256), 'ACD Distribution for vcal {} in {} Range'.format(vcal, 'high' if high else 'low'), x_tit='ADC', x_range=ax_range(x, 0, .2, .7))
 
     def wbc_scan(self, min_wbc=97, max_triggers=50, max_wbc=130, plot=False):
         """do_wbcScan [minimal WBC] [number of events] [maximal WBC]: \n
@@ -704,34 +682,20 @@ class CLIX:
 
     def plot_wbc(self, yields, show=True):
         if show:
-            mg = TMultiGraph('mg_wbc', 'WBC Scans for all ROCs')
-            colors = range(1, len(yields) + 1)
-            leg = Plotter.create_legend(nentries=self.get_n_rocs(), x1=.7)
             try:
-                x_min = next(key for key, value in yields.iteritems() if any(v > 0 for v in value)) - 1
+                x_min = next(key for key, value in yields.items() if any(v > 0 for v in value)) - 1
                 x_max = next(key for key, value in OrderedDict(reversed(yields.items())).iteritems() if any(v > 0 for v in value)) + 2
             except StopIteration:
-                print 'all zero...'
+                print('all zero...')
                 return
-            for roc in xrange(self.get_n_rocs()):
-                x_vals = xrange(x_min, x_max)
-                y_vals = [yields[wbc][roc] for wbc in x_vals]
-                gr = Plotter.create_graph(x=x_vals, y=y_vals, tit='wbcs for roc {r}'.format(r=roc), xtit='wbc', ytit='yield [%]', color=colors[roc])
-                leg.AddEntry(gr, 'roc{r}'.format(r=roc), 'lp')
-                mg.Add(gr, 'lp')
-            self.Plotter.plot_histo(mg, draw_opt='a', l=leg)
-            mg.GetXaxis().SetTitle('WBC')
-            mg.GetYaxis().SetTitle('Yield [%]')
+            x = arange(x_min, x_max)
+            g = [self.Draw.graph(x, [yields[wbc][roc] for wbc in x], xtit='wbc', ytit='yield [%]', show=False) for roc in range(self.NRocs)]
+            self.Draw.multigraph(g, 'WBC Scan', ['ROC {}'.format(i) for i in range(self.NRocs)], 'lp')
 
     def hitmap(self, t=1, wbc=93, n=None, random_trigger=False):
-        data = self.get_data(wbc, t, n, random_trigger)
-        pix_data = [pix for event in data for pix in event.pixels]
-        h = TH1I('h', 'h', 512, -256, 256)
-        for pix in pix_data:
-            h.Fill(pix.value)
-        print 'Entries:', h.GetEntries
-        self.Plotter.plot_histo(h, draw_opt='hist')
-        self.plot_map(pix_data, 'Hit Map', count=True, no_stats=True)
+        pix_data = [pix for event in self.take_data(wbc, t, n, random_trigger) for pix in event.pixels]
+        self.Draw.distribution([px.value for px in pix_data], make_bins(-256, 256), xtit='Pulse Height [adc]')
+        self.plot_map(pix_data, 'Hit Map', count=True, stats=set_statbox(entries=True))
 
     def hitmap_random(self, t, n=10000):
         return self.hitmap(t, random_trigger=True, n=n)
@@ -808,7 +772,7 @@ class CLIX:
     def save_hdf5(self, t=1, n=None, random=False):
         w = HDF5Writer('main')
         self.enable_all()
-        w.add_data(self.get_data(w.WBC, t, n, random))
+        w.add_data(self.take_data(w.WBC, t, n, random))
         w.convert()
 
     def save_data(self, n=240000):
@@ -836,36 +800,32 @@ class CLIX:
         self.daq_stop()
         BREAK = False
 
-    def adjust_black_levels(self, avg=100):
-        self.api.daqStart()
-        self.api.maskAllPixels(1)
-        n_rocs = self.api.getNRocs()
-        self.api.daqTrigger(avg, 500)
-        events = [self.daq_get_raw_event() for _ in xrange(avg)]
-        b_levels = [[event[i] for event in events] for i in xrange(1, 3 * n_rocs, 3)]
-        ub_levels = [[event[i] for event in events] for i in xrange(0, 3 * n_rocs, 3)]
-        b = [mean(l) for l in b_levels]
-        ub = [mean(l) for l in ub_levels]
-        print b, ub
+    def setup_analogue(self, target_ia=24):
+        info('adjusting vana to target {} mA ...'.format(target_ia))
+        self.find_vana(target_ia)
+        info('adjusting clock delays ...')
+        self.find_clk_delay()
+        info('adjusting sampling delays ...')
+        self.find_tb_delays()
+        # todo add caldel scan
+        info('adjusting decoding offsets ...')
+        self.find_offsets()
 
     def find_tb_delays(self):
         """findAnalogueTBDelays: configures tindelay and toutdelay"""
         self.set_tb_delays({'tindelay': 0, 'toutdelay': 20})
         self.enable_all()
         self.api.maskAllPixels(1)
-        self.cycle_tb()  # first reading may be bad
-        data = self.get_raw_event()
-        print(data)
+        data = mean(self.get_raw_data(), axis=0)
         tin = argmin(data)
-        tout = 20 - (data.size - tin - 3 * self.api.getNRocs())
+        tout = 20 - (data.size - tin - 3 * self.NRocs)
         self.set_tb_delays({'tindelay': tin, 'toutdelay': tout})
-        self.save_tb_config('tindelay', tin)
-        self.save_tb_config('toutdelay', tout)
+        self.save_tb_delays()
         self.api.maskAllPixels(0)
 
     def find_offsets(self, n_trig=1000):
         b_off, l1_off, alpha = [], [], []
-        self.enable_single_pixel(15, 59)
+        self.enable_single_pixel(15, 59, prnt=False)
         self.get_raw_event()  # first reading may be bad
         data = self.get_raw_event(n_trig=n_trig)
         if data.shape[1] != 9 * self.get_n_rocs():
@@ -874,7 +834,7 @@ class CLIX:
         for roc in xrange(self.get_n_rocs()):
             l1_off.append(mean(data[:, (3 + 9 * roc):(8 + 9 * roc)]))
             b_off.append(mean(data[:, 1 + 9 * roc]))
-        self.enable_single_pixel(21, 5)
+        self.enable_single_pixel(21, 5, prnt=False)
         d_alpha = self.get_raw_event(n_trig=n_trig)
         for roc in range(self.get_n_rocs()):
             high, low0, low1 = mean(d_alpha[:, 5]), mean(data[:, 6]), mean(d_alpha[:, 6])
@@ -887,51 +847,40 @@ class CLIX:
         self.save_config('alphas',  '[{}]'.format(','.join('{:1.2f}'.format(v) for v in alpha)))
         self.enable_all()
 
-    def find_clk_delay(self, min_val=0, max_val=25, n_triggers=1000):
-        """find the best clock delay setting """
-        # variable declarations
-        cols = [0, 2, 4, 6, 8, 10, 15]
-        rows = [44, 41, 38, 35, 32, 29, 59]  # special pixel setting for splitting
-        spectrum = TSpectrum(10)
-        best_black, best_level = [], []
+    def find_clk_delay(self, xmin=0, xmax=20):
+        # todo: extend for several rocs
+        tin, tout = [self.TBDelays[i] for i in ['tindelay', 'toutdelay']]
+        self.set_tb_delays({'tindelay': 0, 'toutdelay': 20})
+        x = arange(xmin, xmax)
+        self.PBar.start(x.size, counter=True)
+        ub, b, ld = array([self.get_mean_header(clk) for clk in x]).T
+        x, ub, b, ld = x[ub != 0], ub[ub != 0], b[ub != 0], ld[ub != 0]
+        # clk_b = x[argmin(abs(b))]
+        # self.Draw.multigraph([self.Draw.graph(x, y, show=False) for y in [ub, b, ld]], 'clk scan', ['ub', 'b', 'ld'])
+        self.set_clock(int(round(mean([x[argmax(ld)], mean(x[where(ub < min(ub) + 5)])]))))
+        self.set_tb_delays({'tindelay': tin, 'toutdelay': tout})
+        self.save_tb_delays()
 
-        print 'scanning the clk delays ...'
-        self.PBar.start(self.get_n_rocs() * (max_val - min_val))
-        set_root_output(False)
-        for roc in xrange(self.get_n_rocs()):
-            black_spreads = []
-            level_spreads = []
-            self.disable_all(roc)
-            self.enable_pixels(cols, rows)
-            for clk in xrange(min_val, max_val):
-                self.set_clock(clk)
-                self.send_triggers(n_triggers)
-                events = self.get_raw_buffer()
-                try:
-                    black_spread = mean([abs(mean(events[:, 1 + roc * 3]) - mean(events[:, 3 + roc * 3 + (len(cols) - 1) * 6 + j])) for j in xrange(5)])
-                except (IndexError, TypeError):
-                    black_spread = 99
-                black_spreads.append(black_spread)
-                h = self.get_address_levels(data=events)
-                if spectrum.Search(h) == 6:
-                    levels = sorted([spectrum.GetPositionX()[i] for i in xrange(6)])
-                    spread = mean_sigma([levels[i + 1] - levels[i] for i in xrange(len(levels) - 1)])[1]
-                else:
-                    spread = 99
-                level_spreads.append(spread)
-                self.PBar.update(roc * (max_val - min_val) + clk - min_val)
-            best_black.append(range(min_val, max_val)[black_spreads.index(min(black_spreads))])
-            best_level.append(range(min_val, max_val)[level_spreads.index(min(level_spreads))])
-        set_root_output(True)
-        for roc, (b, lvl) in enumerate(zip(best_black, best_level)):
-            print 'ROC {}: clk for lowest black spread: {}'.format(roc, b)
-            print 'ROC {}: clk for lowest level spread: {}'.format(roc, lvl)
+    def find_vana(self, target=24, xmin=60, xmax=180):
+        values = []
+        for roc in range(self.NRocs):
+            self.set_dac('vana', 0)  # set vana of all ROCs to 0
+            values.append(self._find_vana(target, vana=int(mean([xmin, xmax])), step=(xmax - xmin) // 2, roc=roc))
+        for i in range(self.NRocs):
+            self.set_dac('vana', values[i], i)
 
-    def draw_address_levels(self, n_trigger=1000, show=True):
-        h = self.get_address_levels(n_trigger)
-        format_histo(h, x_tit='Level [adc]', y_tit='Number of Entries', y_off=1.5)
-        self.Draw.draw_histo(h, show=show, lm=.12)
-        return h
+    def _find_vana(self, target=24, vana=120, step=60, roc=0):
+        self.set_dac('vana', vana, roc)
+        c = self.get_ia(prnt=False)
+        if abs(c - target) < .2:
+            info('analogue current: {:.1f} mA'.format(c))
+            self.save_dac_parameters(roc)
+            return vana
+        return self._find_vana(target, vana + step // 2 * int(sign(target - c)), max(step // 2, 1))
+
+    def draw_address_levels(self, n_trigger=1000, **kwargs):
+        x = self.get_address_levels(n_trigger).flatten()
+        return self.Draw.distribution(x, make_bins(-512, 512), x_tit='Level [adc]', stats=set_statbox(entries=True), **kwargs)
 
     def s_curve(self, col=14, row=14, ntrig=1000):
         """ checkADCTimeConstant [vcal=200] [ntrig=10]: sends an amount of triggers for a fixed vcal in high/low region and prints adc values"""
@@ -939,14 +888,7 @@ class CLIX:
         efficiencies = [0 if not px else px[0].value / ntrig for px in self.api.getEfficiencyVsDAC('vcal', 1, 0, 255, nTriggers=ntrig)]
         g = self.Draw.make_tgrapherrors('gsc', 'S-Curve for Pixel {} {}'.format(col, row), x=arange(256), y=efficiencies)
         format_histo(g, x_tit='VCAL', y_tit='Efficiency [%]', y_off=1.3)
-        self.Draw.draw_histo(g, draw_opt='ap', lm=.12)
-
-    def find_vana(self, target=24, vana=120, step=60):
-        c = self.get_ia(vana, prnt=False)
-        if abs(c - target) < .2 or step == 1:
-            info('analogue current: {:.1f} mA'.format(c))
-            return self.save_dac_config('vana', vana)
-        return self.find_vana(target, vana + step // 2 * int(sign(target - c)), step // 2)
+        self.Draw.histo(g, draw_opt='ap', lm=.12)
 
 
 if __name__ == '__main__':
