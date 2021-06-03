@@ -779,7 +779,7 @@ def get_graph_x(g, err=True):
 def get_graph_y(g, err=True):
     if is_iter(g):
         return array([v for ig in g for v in get_graph_y(ig, err)])
-    return array([ufloat(g.GetY()[i], g.GetEY()[i]) if err else g.GetX()[i] for i in range(g.GetN())])
+    return array([ufloat(g.GetY()[i], g.GetEY()[i]) if err else g.GetY()[i] for i in range(g.GetN())])
 
 
 def get_hist_vec(p, err=True):
