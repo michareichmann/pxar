@@ -850,9 +850,8 @@ class CLIX:
         self.enable_single_pixel(15, 59, prnt=False)
         self.get_raw_event()  # first reading may be bad
         data = self.get_raw_event(n_trig=n_trig)
-        if data.shape[1] != 9 * self.get_n_rocs():
-            warning('corrupt data!')
-            return
+        if len(data.shape) != 2 or data.shape[1] != 9 * self.get_n_rocs():
+            return warning('corrupt data!')
         for roc in xrange(self.get_n_rocs()):
             l1_off.append(mean(data[:, (3 + 9 * roc):(8 + 9 * roc)]))
             b_off.append(mean(data[:, 1 + 9 * roc]))
@@ -872,7 +871,8 @@ class CLIX:
     def find_clk_delay(self, xmin=0, xmax=20, show=False):
         old = self.set_tb_delays({'tindelay': 0, 'toutdelay': 20})
         self.PBar.start(xmax - xmin, counter=True)
-        data = array([self.get_mean_header(clk) for clk in arange(xmin, xmax)]).T
+        header = array([self.get_mean_header(clk) for clk in arange(xmin, xmax)])
+        data = array([v if v.size == self.NRocs * 3 else zeros(self.NRocs * 3, 'i') for v in header]).T  # set faulty clocks to 0
         clk = []
         for roc in range(self.NRocs):
             x, (ub, b, ld) = arange(xmin, xmax), data[arange(3) + 3 * roc]
