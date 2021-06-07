@@ -384,6 +384,10 @@ class CLIX:
             self.send_triggers(n_trig)
         return self.get_raw_buffer(convert)
 
+    def show_event(self, n=1):
+        for event in self.get_data(n):
+            print('[{}]'.format(', '.join(str(px) for px in event.pixels)))
+
     def get_mean_black(self, n_trigger=1000):
         self.send_triggers(n_trigger)
         return mean_sigma(self.get_raw_buffer()[:, 1])
