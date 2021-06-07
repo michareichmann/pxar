@@ -234,6 +234,8 @@ cdef class PxEvent:
         for i in self.trailer: s += hex(i) + " "
         s += " ======\n"
         return str(s)
+    def __repr__(self):
+        return '[{}]'.format(', '.join(px for px in self.pixels))
     cdef clone(self, Event ev):
         self.thisptr = new Event(ev)
     def printHeader(self):
