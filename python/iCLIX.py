@@ -829,10 +829,11 @@ class CLIX:
         old = self.set_tb_delays({'tindelay': 0, 'toutdelay': 20})
         self.enable_all()
         self.api.maskAllPixels(1)
-        data = mean(self.get_raw_data(), axis=0)
+        data = self.get_raw_data()
         if len(data.shape) != 2 or data.shape[1] > 100:
             warning('corrupt data of shape {}'.format(data.shape))
             self.set_tb_delays(old)
+        data = mean(data, axis=0)
         tin = min(argsort(data)[:self.NRocs])
         tout = 20 - (data.size - tin - 3 * self.NRocs)
         self.set_tb_delays({'tindelay': tin, 'toutdelay': tout}, prnt=True)
