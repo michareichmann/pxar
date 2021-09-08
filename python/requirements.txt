@@ -3,3 +3,4 @@ uncertainties
 numpy
 progressbar
 screeninfo
+ipython
