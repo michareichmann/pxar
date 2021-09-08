@@ -4,3 +4,4 @@ numpy
 progressbar
 screeninfo
 ipython
+cython
