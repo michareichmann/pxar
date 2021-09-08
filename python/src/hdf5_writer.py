@@ -5,7 +5,7 @@
 # --------------------------------------------------------
 
 import h5py
-from numpy import cumsum, mean, sum, empty, zeros
+from numpy import cumsum, mean, sum, empty
 from file_writer import *
 
 
@@ -37,7 +37,7 @@ class HDF5Writer(FileWriter):
             info('saving file: {}'.format(self.FileName))
             with h5py.File(join(self.DataDir, self.FileName), 'w') as f:
                 f.create_dataset('trigger_phase', data=array(self.TriggerPhase, 'u1')) if self.TriggerPhase else do_nothing()
-                for roc in xrange(self.NPlanes):
+                for roc in range(self.NPlanes):
                     grp = f.create_group('ROC{}'.format(roc))
                     grp.create_dataset('hits', data=self.Hits[roc])
                     grp.create_dataset('n_hits', data=self.NHits[roc])
@@ -62,7 +62,7 @@ class HDF5Writer(FileWriter):
         self.NHits.append(n_hits) if any(n_hits) else do_nothing()
 
     def make_arrays(self):
-        for roc in xrange(self.NPlanes):
+        for roc in range(self.NPlanes):
             self.Hits[roc] = array(self.Hits[roc], dtype=[('column', 'u2'), ('row', 'u2'), ('adc', 'i2'), ('vcal', 'f4')])
         self.NHits = array(self.NHits, 'u1').T
         self.NEvents = self.NHits[0].size
@@ -71,7 +71,7 @@ class HDF5Writer(FileWriter):
     def clusterise(self):
         self.PBar.start(self.NEvents * self.NPlanes)
         info('clusterise ...')
-        for roc in xrange(self.NPlanes):
+        for roc in range(self.NPlanes):
             for i, event in enumerate(split(self.Hits[roc], cumsum(self.NHits[roc])[:-1])):
                 cluster_hits = [[event[0]]]
                 for hit in event[1:]:

@@ -115,6 +115,9 @@ cdef class PixelConfig:
         def __get__(self): return self.thisptr.mask()
         def __set__(self, mask): self.thisptr.setMask(mask)
 
+    def __repr__(self):
+        return self.__str__()
+
 
 cdef class RocConfig:
     cdef rocConfig *thisptr      # hold a C++ instance which we're wrapping

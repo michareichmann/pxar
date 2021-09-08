@@ -4,9 +4,8 @@
 # created on November 13th 2019 by M. Reichmann (remichae@phys.ethz.ch)
 # --------------------------------------------------------
 
-from os.path import realpath
 from glob import glob
-from draw import *
+from helpers.draw import *
 
 
 class FileReader:

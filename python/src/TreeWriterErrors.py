@@ -73,11 +73,11 @@ class TreeWriter:
         return dic
 
     def clear_vectors(self):
-        for key in self.VectorBranches.iterkeys():
+        for key in self.VectorBranches.keys():
             self.VectorBranches[key].clear()
 
     def set_branches(self):
-        for key, vec in self.VectorBranches.iteritems():
+        for key, vec in self.VectorBranches.items():
             self.Tree.Branch(key, vec)
 
     def write_tree(self, hv, cur):
@@ -98,7 +98,7 @@ class TreeWriter:
                 self.VectorBranches['invalid_address'].push_back(bool(pix.invalid_address))
                 self.VectorBranches['invalid_pulse_height'].push_back(bool(pix.invalid_pulse_height))
                 self.VectorBranches['buffer_corruption'].push_back(bool(pix.buffer_corruption))
-            for k in xrange(len(ev.roc_readback)):
+            for k in range(len(ev.roc_readback)):
                 self.VectorBranches['roc_readback'].push_back(ev.roc_readback[k])
                 self.VectorBranches['incomplete_data'].push_back(ev.incomplete_data[k])
                 self.VectorBranches['missing_roc_headers'].push_back(ev.missing_roc_headers[k])
@@ -106,7 +106,7 @@ class TreeWriter:
                 self.VectorBranches['eventid_mismatch'].push_back(err)
             for err in ev.no_data:
                 self.VectorBranches['no_data'].push_back(err)
-            for j in xrange(len(ev.header)):
+            for j in range(len(ev.header)):
                 self.VectorBranches['header'].push_back(ev.header[j])
                 self.VectorBranches['trailer'].push_back(ev.trailer[j])
                 self.VectorBranches['pkam'].push_back(ev.havePkamReset[j])

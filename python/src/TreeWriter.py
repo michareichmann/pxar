@@ -5,7 +5,7 @@
 # --------------------------------------------------------
 
 from ROOT import TTree, TFile
-from utils import *
+from helpers.utils import *
 from os.path import join, dirname, realpath, basename
 from time import sleep
 
@@ -40,7 +40,6 @@ class TreeWriter:
         sleep(.1)
         self.copy_file()
 
-
     def load_run_number(self):
         if isfile(self.RunFileName):
             f = open(self.RunFileName)
@@ -74,12 +73,12 @@ class TreeWriter:
         return {}
 
     def clear_vectors(self):
-        for i in xrange(self.NPlanes):
+        for i in range(self.NPlanes):
             for key in self.VectorBranches[i].iterkeys():
                 self.VectorBranches[i][key].clear()
 
     def set_branches(self):
-        for itree in xrange(self.NPlanes):
+        for itree in range(self.NPlanes):
             for key, value in self.ScalarBranches[itree].iteritems():
                 self.Trees[itree].Branch(key, value, '{}/{}'.format(key, type_dict[value[0].dtype.name]))
             for key, vec in self.VectorBranches[itree].iteritems():
