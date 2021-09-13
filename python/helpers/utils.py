@@ -11,7 +11,7 @@ from pickle import loads
 from configparser import ConfigParser, NoSectionError, NoOptionError
 from datetime import datetime
 from time import time
-from numpy import average, sqrt, array, count_nonzero, zeros, full, log2, quantile
+from numpy import average, sqrt, array, count_nonzero, zeros, full, log2, quantile, cos, sin, arctan2
 from progressbar import Bar, ETA, FileTransferSpeed, Percentage, ProgressBar, Widget, SimpleProgress
 from uncertainties import ufloat
 from uncertainties.core import Variable, AffineScalarFunc
@@ -342,5 +342,13 @@ def get_x(x1, x2, y1, y2, y):
 
 def get_y(x1, x2, y1, y2, x):
     return get_x(y1, y2, x1, x2, x)
+
+
+def cart2pol(x, y):
+    return array([sqrt(x ** 2 + y ** 2), arctan2(y, x)])
+
+
+def pol2cart(rho, phi):
+    return array([rho * cos(phi), rho * sin(phi)])
 # endregion CLASSES
 # ----------------------------------------
