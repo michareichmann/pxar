@@ -22,6 +22,7 @@ cmake-build-*/
 ~*
 *~
 .*
+!.bash_aliases
 \#*
 
 # auto-generated files should not be added 
