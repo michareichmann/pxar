@@ -7,4 +7,4 @@ alias change_i2c='$PXARPATH/python/change_i2c.py'
 alias find_i2c='$PXARPATH/python/find_i2c.py'
 
 # CLIX
-alias iclix='ipython -i $PXARPATH/python/iclix.py -- @$'
+alias iclix='ipython -i $PXARPATH/python/iCLIX.py -- @$'
