@@ -862,9 +862,9 @@ if __name__ == '__main__':
     parser.add_argument('dir', metavar="DIR", help="The data directory with all required config files. [default = . ]", nargs='?', default='.')
     parser.add_argument('--run', '-r', metavar="FILE", help="Load a cmdline script to be executed before entering the prompt.", default='')
     parser.add_argument('--verbosity', '-v', metavar="LEVEL", default="INFO", help="The output verbosity set in the pxar API.")
-    parser.add_argument('--trim', '-T', nargs='?', default=None, help="The output verbosity set in the pxar API. [default = None]")
+    parser.add_argument('--trim', '-T', nargs='?', default='', help="The output verbosity set in the pxar API. [default = '']")
     parser.add_argument('-wbc', action='store_true')
-    args = parser.parse_args(argv)
+    args = parser.parse_args()
 
     print_banner('# STARTING ipython pXar Command Line Interface')
     z = CLIX(args.dir, args.verbosity, args.trim)
