@@ -6,7 +6,7 @@
 
 import h5py
 from numpy import cumsum, mean, sum, empty
-from file_writer import *
+from src.file_writer import *
 
 
 class HDF5Writer(FileWriter):

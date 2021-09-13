@@ -5,7 +5,7 @@
 # --------------------------------------------------------
 
 from collections import OrderedDict
-from TreeWriter import *
+from src.TreeWriter import *
 from time import time
 from numpy import array, zeros
 from glob import glob

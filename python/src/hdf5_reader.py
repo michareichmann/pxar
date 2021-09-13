@@ -5,7 +5,7 @@
 # --------------------------------------------------------
 
 import h5py
-from file_reader import *
+from src.file_reader import *
 from numpy import full, arange, where
 from ROOT import TH2I, TH1F, TProfile2D, TProfile
 from json import loads
