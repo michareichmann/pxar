@@ -53,11 +53,11 @@ class TreeWriter:
         return dic
 
     def clear_vectors(self):
-        for key in self.VectorBranches.iterkeys():
+        for key in self.VectorBranches.keys():
             self.VectorBranches[key].clear()
 
     def set_branches(self):
-        for key, vec in self.VectorBranches.iteritems():
+        for key, vec in self.VectorBranches.items():
             self.Tree.Branch(key, vec)
 
     def write_tree(self):

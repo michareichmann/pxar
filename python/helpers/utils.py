@@ -3,18 +3,20 @@
 # created on June 19th 2018 by M. Reichmann (remichae@phys.ethz.ch)
 # --------------------------------------------------------
 
+from ROOT import PyConfig
+PyConfig.IgnoreCommandLineOptions = True
 from os.path import isfile, exists, dirname, realpath
 from os import makedirs, _exit
 from pickle import loads
-from ConfigParser import ConfigParser, NoSectionError, NoOptionError
+from configparser import ConfigParser, NoSectionError, NoOptionError
 from datetime import datetime
 from time import time
-from ROOT import TFile, gROOT
-from numpy import average, sqrt, array, count_nonzero, zeros, full
+from numpy import average, sqrt, array, count_nonzero, zeros, full, log2, quantile, cos, sin, arctan2
 from progressbar import Bar, ETA, FileTransferSpeed, Percentage, ProgressBar, Widget, SimpleProgress
 from uncertainties import ufloat
 from uncertainties.core import Variable, AffineScalarFunc
 from functools import wraps
+from copy import deepcopy
 
 
 type_dict = {'int32': 'I',
@@ -36,38 +38,37 @@ def get_t_str():
     return datetime.now().strftime('%H:%M:%S')
 
 
-def info(msg, overlay=False, prnt=True):
+def prnt_msg(txt, head, color=None, blank_lines=0, endl=True, prnt=True):
     if prnt:
-        print '{ov}{head} {t} --> {msg}'.format(t=get_t_str(), msg=msg, head='{}INFO:{}'.format(GREEN, ENDC), ov='\033[1A\r' if overlay else '')
+        print('\n' * blank_lines + f'\r{color}{head}:{ENDC} {get_t_str()} --> {txt}', end='\n' if endl else ' ')
+
+
+def info(txt, blank_lines=0, endl=True, prnt=True):
+    prnt_msg(txt, 'INFO', GREEN, blank_lines, endl, prnt)
     return time()
 
 
 def add_to_info(t, msg='Done', prnt=True):
     if prnt:
-        print('{m} ({t:2.2f} s)'.format(m=msg, t=time() - t))
+        print(('{m} ({t:2.2f} s)'.format(m=msg, t=time() - t)))
 
 
-def warning(msg, prnt=True):
-    if prnt:
-        print('{head} {t} --> {msg}'.format(t=get_t_str(), msg=msg, head='{}WARNING:{}'.format(YELLOW, ENDC)))
+def warning(txt, blank_lines=0, prnt=True):
+    prnt_msg(txt, 'WARNING', YELLOW, blank_lines, prnt=prnt)
 
 
-def critical(msg):
-    print '{head} {t} --> {msg}\n'.format(t=get_t_str(), msg=msg, head='{}CRITICAL:{}'.format(RED, ENDC))
-    _exit(1)
+def critical(txt):
+    prnt_msg(txt, 'CRITICAL', RED)
+    _exit(2)
 
 
 def print_elapsed_time(start, what='This'):
-    print('Elapsed time for {w}: {t}'.format(t=get_elapsed_time(start), w=what))
+    print(('Elapsed time for {w}: {t}'.format(t=get_elapsed_time(start), w=what)))
 
 
 def get_elapsed_time(start):
     t = datetime.fromtimestamp(time() - start)
     return '{}.{:02.0f}'.format(t.strftime('%M:%S'), t.microsecond / 10000)
-
-
-def file_exists(filename):
-    return isfile(filename)
 
 
 def round_down_to(num, val=1):
@@ -131,7 +132,7 @@ def uarr2n(arr):
 
 
 def print_banner(msg, symbol='=', new_lines=True):
-    print '{n}{delim}\n{msg}\n{delim}{n}'.format(delim=(len(str(msg)) + 10) * symbol, msg=msg, n='\n' if new_lines else '')
+    print('{n}{delim}\n{msg}\n{delim}{n}'.format(delim=(len(str(msg)) + 10) * symbol, msg=msg, n='\n' if new_lines else ''))
 
 
 def do_nothing():
@@ -153,7 +154,7 @@ def has_root():
 
 
 def read_root_file(filename):
-    if file_exists(filename):
+    if isfile(filename):
         return TFile(filename)
     critical('The file: "{}" does not exist...'.format(filename))
 
@@ -199,21 +200,12 @@ def mean_sigma(values, weights=None, err=True):
     return (m, s) if err else (m.n, s.n)
 
 
-def set_root_warnings(status):
-    gROOT.ProcessLine('gErrorIgnoreLevel = {e};'.format(e='0' if status else 'kError'))
-
-
-def set_root_output(status=True):
-    gROOT.SetBatch(not status)
-    set_root_warnings(status)
-
-
 def remove_letters(string):
-    return filter(lambda x: x.isdigit(), string)
+    return [x for x in string if x.isdigit()]
 
 
 def remove_digits(string):
-    return filter(lambda x: not x.isdigit(), string)
+    return [x for x in string if not x.isdigit()]
 
 
 def calc_eff(k=0, n=0, values=None):
@@ -320,10 +312,43 @@ class Config(ConfigParser):
         return self.get_value(section, option, list, choose(default, []))
 
     def show(self):
-        for key, section in self.items():
-            print('[{}]'.format(key))
+        for key, section in list(self.items()):
+            print(('[{}]'.format(key)))
             for option in section:
-                print('{} = {}'.format(option, self.get(key, option)))
+                print(('{} = {}'.format(option, self.get(key, option))))
             print()
+
+
+def make_byte_string(v):
+    n = int(log2(v) // 10) if v else 0
+    return f'{v / 2 ** (10 * n):1.1f} {["B", "kB", "MB", "GB"][n]}'
+
+
+def prep_kw(dic, **default):
+    d = deepcopy(dic)
+    for kw, value in default.items():
+        if kw not in d:
+            d[kw] = value
+    return d
+
+
+def freedman_diaconis(x):
+    return 2 * (quantile(x, .75) - quantile(x, .25)) / x.size ** (1 / 3)
+
+
+def get_x(x1, x2, y1, y2, y):
+    return (x2 - x1) / (y2 - y1) * (y - y1) + x1
+
+
+def get_y(x1, x2, y1, y2, x):
+    return get_x(y1, y2, x1, x2, x)
+
+
+def cart2pol(x, y):
+    return array([sqrt(x ** 2 + y ** 2), arctan2(y, x)])
+
+
+def pol2cart(rho, phi):
+    return array([rho * cos(phi), rho * sin(phi)])
 # endregion CLASSES
 # ----------------------------------------

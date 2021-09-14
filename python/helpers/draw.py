@@ -4,13 +4,72 @@
 # created on February 15th 2018 by M. Reichmann (remichae@phys.ethz.ch)
 # --------------------------------------------------------
 
-from ROOT import PyConfig
-PyConfig.IgnoreCommandLineOptions = True
-from ROOT import TGraphErrors, TGaxis, TLatex, TGraphAsymmErrors, gStyle, TLegend, TArrow, TPad, TCutG, TLine, TPaveText, TPaveStats, TH1F, TEllipse, TColor, TProfile
-from ROOT import TProfile2D, TH2F, THStack, TMultiGraph, TCanvas
-from numpy import linspace, ones, ceil, append, absolute, mean, ndarray, where, arange
+from ROOT import TGraphErrors, TGaxis, TLatex, TGraphAsymmErrors, TCanvas, gStyle, TLegend, TArrow, TPad, TCutG, TLine, TPaveText, TPaveStats, TH1F, TEllipse, TColor, TProfile
+from ROOT import TProfile2D, TH2F, TH3F, THStack, TMultiGraph, TPie, gROOT, TF1
+from numpy import sign, linspace, ones, ceil, append, tile, absolute, rot90, flip, argsort, ndarray, diff, mean, arange, frombuffer, where, concatenate, pi
+from helpers.utils import *
 from os.path import join
-from utils import *
+from inspect import signature
+
+
+class FitRes(ndarray):
+
+    def __new__(cls, f):
+        return ndarray.__new__(cls, f.GetNpar() if 'TF1' in f.ClassName() else f.NPar(), object)
+
+    def __init__(self, f, **kwargs):
+        super().__init__(**kwargs)
+        is_tf1 = 'TF1' in f.ClassName()
+        self.Fit = f
+        self.NPar = f.GetNpar() if is_tf1 else f.NPar()
+        self.Pars = array([f.GetParameter(i) for i in range(self.NPar)] if is_tf1 else list(f.Parameters()))
+        self.Errors = [f.GetParError(i) for i in range(self.NPar)] if is_tf1 else list(f.Errors())
+        self.Names = [f.GetParName(i) if is_tf1 else f.ParName(i) for i in range(self.NPar)]
+        self.vChi2 = f.GetChisquare() if is_tf1 else f.Chi2()
+        self.vNdf = f.GetNDF() if is_tf1 else f.Ndf()
+        self.put(arange(self.NPar), self.get_pars())
+
+    def __get__(self, obj, objtype=None):
+        return self.get_pars()
+
+    def __getitem__(self, item):
+        return self.get_pars()[item]
+
+    def __repr__(self):
+        return f'[{", ".join(f"{par:1.2e}" for par in self.Pars)}]'
+
+    def __reduce__(self):
+        pickled_state = super(FitRes, self).__reduce__()
+        return pickled_state[0], pickled_state[1], pickled_state[2] + (self.Pars, self.Errors, self.Names, self.vChi2, self.vNdf)
+
+    def __setstate__(self, state, *args, **kwargs):
+        self.Pars, self.Errors, self.Names, self.vChi2, self.vNdf = state[-5:]
+        super(FitRes, self).__setstate__(state[0:-5])
+
+    def get_pars(self, err=True):
+        return array([ufloat(p, e) for p, e in zip(self.Pars, self.Errors)]) if err else self.Pars
+
+    def get_chi2(self):
+        return self.vChi2 / self.vNdf
+
+    def get_integral(self, xmin=None, xmax=None):
+        xmin, xmax = choose(xmin, self.Fit.GetXmin()), choose(xmax, self.Fit.GetXmax())
+        return ufloat(self.Fit.Integral(xmin, xmax), self.Fit.IntegralError(xmin, xmax))
+
+    def Parameter(self, arg):  # noqa
+        return self.Pars[arg]
+
+    def ParError(self, arg):  # noqa
+        return self.Errors[arg]
+
+    def ParName(self, arg):  # noqa
+        return self.Names[arg]
+
+    def Chi2(self):  # noqa
+        return self.vChi2
+
+    def Ndf(self):  # noqa
+        return self.vNdf
 
 
 def get_color_gradient():
@@ -19,7 +78,7 @@ def get_color_gradient():
     blue = array([0. / 255., 0. / 255., 0. / 255.], 'd')
     red = array([180. / 255., 200. / 255., 0. / 255.], 'd')
     color_gradient = TColor.CreateGradientColorTable(len(stops), stops, red, green, blue, 255)
-    return array([color_gradient + ij for ij in range(255)], 'i')
+    return array([color_gradient + ij for ij in range(255)])
 
 
 def load_resolution(default=800):
@@ -39,6 +98,7 @@ class Draw(object):
     Colors = get_color_gradient()
     Objects = []
     Dir = get_base_dir()
+    Show = True
 
     Title = True
     Legend = False
@@ -60,11 +120,22 @@ class Draw(object):
         Draw.Legend = Draw.Config.get_value('SAVE', 'info legend', default=False)
         Draw.FillColor = Draw.Config.get_value('PLOTS', 'fill color', default=821)
         Draw.Font = Draw.Config.get_value('PLOTS', 'legend font', default=42)
+        Draw.Show = Draw.Config.get_value('SAVE', 'show', default=True)
 
         Draw.setup()
 
-    def __call__(self, *args, **kwargs):
-        return Draw.histo(**kwargs)
+        self.Dic = {'TH1F': self.distribution, 'TH1I': self.distribution, 'TH1D': self.distribution,
+                    'TH1': self.function,
+                    'TGraph': self.graph, 'TGraphErrors': self.graph, 'TGraphAsymmErrors': self.graph,
+                    'TProfile': self.profile,
+                    'TH2I': self.histo_2d, 'TH2D': self.histo_2d, 'TH2F': self.histo_2d,
+                    'TProfile2D': self.prof2d,
+                    'TMultiGraph': self.multigraph}
+
+    def __call__(self, th, *args, **kwargs):
+        if th.ClassName() in self.Dic:
+            return self.Dic[th.ClassName()](th, *args, **kwargs)
+        return Draw.histo(th, *args, **kwargs)
 
     @staticmethod
     def add(*args):
@@ -90,11 +161,19 @@ class Draw(object):
         gStyle.SetNumberContours(Draw.Config.get_value('PLOTS', 'contours', default=20))
 
     @staticmethod
+    def set_margin(c, side, value=None, default=.1, off=0):
+        do(getattr(c, f'Set{side}Margin'), None if round(getattr(c, f'Get{side}Margin')(), 2) != .1 and value is None else max(choose(value, default) + off, 0))
+
+    @staticmethod
     def set_pad_margins(c=None, l_=None, r=None, b=None, t=None):
-        do(c.SetLeftMargin, l_)
-        do(c.SetRightMargin, r if r is not None else None if round(c.GetRightMargin(), 2) != .1 else .03)
-        do(c.SetBottomMargin, None if round(c.GetBottomMargin(), 2) != .1 and b is None else (.17 if b is None else b) - (.07 if not Draw.Legend else 0))
-        do(c.SetTopMargin, None if round(c.GetTopMargin(), 2) != .1 else max((.1 if t is None else t) - (0 if Draw.Title else .07), 0))
+        Draw.set_margin(c, 'Left', l_, default=.13)
+        Draw.set_margin(c, 'Right', r, default=.02)
+        Draw.set_margin(c, 'Bottom', b, default=.115, off=.06 if Draw.Legend else 0)
+        Draw.set_margin(c, 'Top', t, default=.02, off=.08 if Draw.Title else 0)
+
+    @staticmethod
+    def set_show(status=ON):
+        set_root_output(status and Draw.Show)
 
     # endregion SET
     # ----------------------------------------
@@ -130,6 +209,10 @@ class Draw(object):
     def get_name(string='a'):
         return '{}{}'.format(string, Draw.get_count(string))
 
+    @staticmethod
+    def get_margins(c):
+        return [getattr(c, f'Get{n}Margin')() for n in ['Left', 'Right', 'Bottom', 'Top']] if c is not None else None
+
     # endregion GET
     # ----------------------------------------
 
@@ -137,7 +220,7 @@ class Draw(object):
     # region DRAWING
     @staticmethod
     def canvas(title='c', x=None, y=None, w=1., h=1., logx=None, logy=None, logz=None, gridx=None, gridy=None, transp=None, divide=None, show=True):
-        set_root_output(show)
+        Draw.set_show(show)
         c0 = get_last_canvas(warn=False)
         x = x if x is not None else 0 if c0 is None else c0.GetWindowTopX() + 50
         y = y if y is not None else 0 if c0 is None else c0.GetWindowTopY() + 20
@@ -190,11 +273,12 @@ class Draw(object):
         return Draw.add(line)
 
     @staticmethod
-    def tline(x1, x2, y1, y2, color=1, width=1, style=1):
+    def tline(x1, x2, y1, y2, color=1, width=1, style=1, ndc=None):
         line = TLine(x1, y1, x2, y2)
         line.SetLineColor(color)
         line.SetLineWidth(width)
         line.SetLineStyle(style)
+        do(line.SetNDC, ndc)
         line.Draw()
         return Draw.add(line)
 
@@ -203,8 +287,8 @@ class Draw(object):
         return Draw.line(x, x, ymin, ymax, color, w, style) if not tline else Draw.tline(x, x, ymin, ymax, color, w, style)
 
     @staticmethod
-    def horizontal_line(y, xmin=-1e9, xmax=1e9, color=1, w=1, style=1, tline=False):
-        return Draw.line(xmin, xmax, y, y, color, w, style) if not tline else Draw.tline(xmin, xmax, y, y, color, w, style)
+    def horizontal_line(y, xmin=-1e9, xmax=1e9, color=1, w=1, style=1, tline=False, ndc=None):
+        return Draw.line(xmin, xmax, y, y, color, w, style) if not tline else Draw.tline(xmin, xmax, y, y, color, w, style, ndc)
 
     @staticmethod
     def polygon(x, y, line_color=1, width=1, style=1, name=None, fillstyle=None, fill_color=None, opacity=None, show=True):
@@ -219,8 +303,7 @@ class Draw(object):
 
     @staticmethod
     def box(x1, y1, x2, y2, line_color=1, width=1, style=1, name=None, fillstyle=None, fillcolor=None, opacity=None, show=True):
-        x, y = make_box_args(x1, y1, x2, y2)
-        return Draw.polygon(x, y, line_color, width, style, name, fillstyle, fillcolor, opacity, show)
+        return Draw.polygon(*make_box_args(x1, y1, x2, y2), line_color, width, style, name, fillstyle, fillcolor, opacity, show)
 
     @staticmethod
     def fypolygon(f, x1, x2, y, name=None, n=100, **kwargs):
@@ -228,11 +311,15 @@ class Draw(object):
         Draw.polygon(x, y, name=name, **kwargs)
 
     @staticmethod
-    def tlatex(x, y, text, name='text', align=20, color=1, size=.05, angle=None, ndc=None, font=None, show=True):
+    def tlatex(x, y, text, name=None, align=20, color=1, size=.05, angle=None, ndc=None, font=None, show=True):
         tlatex = TLatex(x, y, text)
-        format_text(tlatex, name, align, color, size, angle, ndc, font)
+        format_text(tlatex, choose(name, Draw.get_name('t')), align, color, size, angle, ndc, font)
         tlatex.Draw() if show else do_nothing()
         return Draw.add(tlatex)
+
+    @staticmethod
+    def date(x, y, align=20, color=1, size=.05, angle=None, font=42, **kwargs):
+        return Draw.tlatex(x, y, datetime.now().strftime('%Y-%m-%d %H:%M'), None, align, color, size, angle, ndc=True, font=font, **kwargs)
 
     @staticmethod
     def arrow(x1, x2, y1, y2, col=1, width=1, opt='<|', size=.005):
@@ -250,7 +337,7 @@ class Draw(object):
         p = TPad(Draw.get_name('pd'), tit, *pos)
         p.SetFillColor(fill_col)
         margins = margins if all(m is None for m in [lm, rm, bm, tm]) else [lm, rm, bm, tm]
-        Draw.set_pad_margins(p, *full(4, .1) if margins is None else margins)
+        Draw.set_pad_margins(p, *margins if margins is not None else full(4, .1) if c is None else Draw.get_margins(c))
         do([p.SetLogx, p.SetLogy, p.SetLogz], [logx, logy, logz])
         do([p.SetGridx, p.SetGridy], [gridx, gridy])
         make_transparent(p) if transparent else do_nothing()
@@ -276,7 +363,7 @@ class Draw(object):
         c = get_last_canvas()
         tm = .98 - .05 - c.GetTopMargin() if y2 is None else y2
         rm = .98 - c.GetRightMargin()
-        p = TPaveStats(rm - width, tm - .06 * (fit.NPars + 1), rm, tm, 'ndc')
+        p = TPaveStats(rm - width, tm - .06 * (fit.NPar + 1), rm, tm, 'ndc')
         p.SetBorderSize(1)
         p.SetFillColor(0)
         p.SetFillStyle(0)
@@ -284,10 +371,22 @@ class Draw(object):
         leg.SetTextFont(42)
         ls = p.GetListOfLines()
         ls.Add(Draw.tlatex(0, 0, '#chi^{{2}} / ndf  = {chi2:{p}} / {ndf}'.format(ndf=fit.Ndf(), chi2=fit.Chi2(), p=prec), size=0, align=0, font=42))
-        for i in range(fit.NPars):
+        for i in range(fit.NPar):
             ls.Add(Draw.tlatex(0, 0, '{n}  = {v:{p}} #pm {e:{p}}'.format(n=names[i], v=fit.Parameter(i), e=fit.ParError(i), p=prec), size=0, align=0, font=42))
         p.Draw()
         return Draw.add(p)
+
+    @staticmethod
+    def add_stats_entry(h, key, value, form='.2f', line=None):
+        s = h.GetListOfFunctions()[0]
+        s.SetName(Draw.get_name('st'))
+        value = f'{value.n:{form}} #pm {value.s:{form}}' if is_ufloat(value) else f'{value:{form}}'
+        text = f'{key} = {value}'
+        h.SetStats(0)
+        y2, hl = s.GetY2NDC(), (s.GetY2NDC() - s.GetY1NDC()) / s.GetSize()
+        s.AddText(text)
+        s.SetY1NDC(s.GetY1NDC() - hl)
+        [Draw.horizontal_line(y2 - i * hl, s.GetX1NDC(), s.GetX2NDC(), tline=True, ndc=True) for i in make_list(line)] if line is not None else do_nothing()
 
     @staticmethod
     def frame(pad, xmin, xmax, ymin, ymax, tit, div=None, y_cent=None):
@@ -335,7 +434,7 @@ class Draw(object):
 
     @staticmethod
     def legend(histos, titles, styles=None, x2=None, y2=None, *args, **kwargs):
-        leg = Draw.make_legend(x2, y2, nentries=len(histos), *args, **kwargs)
+        leg = Draw.make_legend(x2, y2, *args, **prep_kw(kwargs, nentries=len(histos)))
         for i in range(len(histos)):
             leg.AddEntry(histos[i], titles[i], 'lpf' if styles is None else styles[i] if type(styles) is list else styles)
         leg.Draw('same')
@@ -343,10 +442,10 @@ class Draw(object):
 
     @staticmethod
     def histo(th, show=True, lm=None, rm=None, bm=None, tm=None, m=None, draw_opt=None, w=1, h=1, logx=None, logy=None, logz=None, grid=None, gridy=None, gridx=None, phi=None, theta=None,
-              leg=None, canvas=None, sumw2=None, stats=False):
+              leg=None, canvas=None, sumw2=None, stats=False, **kwargs):
         w += .16 if not Draw.Title and w == 1 else 0  # rectify if there is no title
         th.Sumw2(sumw2) if hasattr(th, 'Sumw2') and sumw2 is not None else do_nothing()
-        set_root_output(show)
+        Draw.set_show(show)
         c = Draw.canvas(th.GetTitle().split(';')[0], None, None, w, h, logx, logy, logz, gridx or grid, gridy or grid, show=show) if canvas is None else canvas
         Draw.set_pad_margins(c, *[lm, rm, bm, tm] if m is None else m)
         do([c.SetLogx, c.SetLogy, c.SetLogz], [logx, logy, logz])
@@ -357,86 +456,106 @@ class Draw(object):
             update_canvas()
             for i_leg in make_list(leg):
                 i_leg.Draw('same')
-        set_root_output(True)
+        Draw.set_show(True)
         if stats or stats is None:
-            format_statbox(th, **Draw.Stats if stats else Draw.DefaultStats)
+            for i in (th.GetListOfGraphs() if 'Multi' in th.ClassName() else [th]):
+                format_statbox(i, **Draw.Stats if stats else Draw.DefaultStats)
         return Draw.add(c, th, leg)[0]
 
     @staticmethod
-    def mode(m, **kwargs):
-        d = {2: {'w': 1.5, 'h': .75, 'tit_size': .06, 'lab_size': .05, 'y_off': .7, 'lm': .08, 'bm': .2},
+    def mode(m=1, **kwargs):
+        d = {1: {'tit_size': .05, 'lab_size': .045, 'y_off': 1.35},
+             2: {'w': 1.5, 'h': .75, 'tit_size': .06, 'lab_size': .05, 'y_off': .7, 'lm': .08, 'bm': .15},
              3: {'w': 1.5, 'h': .5, 'tit_size': .07, 'lab_size': .06, 'y_off': .5, 'lm': .073, 'bm': .225, 'rm': .03, 'x_tit': 'Time [ns]', 'y_tit': 'Signal [mV]', 'markersize': .5}
              }[m]
-        return Draw.prepare_kwargs(kwargs, **d)
+        return prep_kw(kwargs, **d)
 
-    @staticmethod
-    def prepare_kwargs(data, **default):
-        for kw, value in default.items():
-            if kw not in data:
-                data[kw] = value
-        return data
-
-    def distribution(self, values, binning=None, title='', thresh=.02, bm=None, lm=None, rm=None, show=True, logy=None, w=1, h=1, stats=None, draw_opt=None, **kwargs):
-        if type(values) == TH1F:
-            th = values
+    def distribution(self, x, binning=None, title='', **kwargs):
+        if hasattr(x, 'GetName'):
+            th = x
         else:
-            th = TH1F(Draw.get_name('h'), title, *choose(binning, find_bins, values=values, thresh=thresh))
-            fill_hist(th, values)
-        format_histo(th, **Draw.prepare_kwargs(kwargs, y_off=1.4, fill_color=Draw.FillColor, y_tit='Number of Entries'))
-        self.histo(th, show=show, bm=bm, lm=lm, rm=rm, logy=logy, w=w, h=h, stats=stats, draw_opt=draw_opt)
+            th = TH1F(Draw.get_name('h'), title, *choose(binning, find_bins, values=x))
+            fill_hist(th, x)
+        format_histo(th, **prep_kw(kwargs, **Draw.mode(), fill_color=Draw.FillColor, y_tit='Number of Entries'))
+        self.histo(th, **prep_kw(kwargs, stats=None))
         return th
 
     def function(self, f, title='', c=None, bm=None, lm=None, rm=None, show=True, logy=None, w=1, h=1, stats=None, draw_opt=None, grid=None, **kwargs):
-        format_histo(f, title=title, **Draw.prepare_kwargs(kwargs, y_off=1.4))
+        format_histo(f, title=title, **prep_kw(kwargs, **Draw.mode()))
         c = get_last_canvas() if draw_opt and 'same' in draw_opt and c is None else c
         self.histo(f, show=show, bm=bm, lm=lm, rm=rm, logy=logy, w=w, h=h, stats=stats, draw_opt=draw_opt, canvas=c, grid=grid)
         return f
 
-    def graph(self, x, y=None, title='', c=None, lm=None, rm=None, bm=None, tm=None, w=1, h=1, show=True, draw_opt=None, gridy=None, logx=False, logy=False, grid=None, **kwargs):
+    def graph(self, x, y=None, title='', c=None, bm=None, show=True, bin_labels=None, **kwargs):
         g = x if y is None else Draw.make_tgrapherrors(x, y)
-        format_histo(g, title=title, **Draw.prepare_kwargs(kwargs, y_off=1.4, fill_color=Draw.FillColor))
-        self.histo(g, show=show, lm=lm, rm=rm, bm=bm, tm=tm, w=w, h=h, gridy=gridy, draw_opt=draw_opt, logx=logx, logy=logy, canvas=c, grid=grid)
+        format_histo(g, title=title, **prep_kw(kwargs, **Draw.mode(), fill_color=Draw.FillColor))
+        set_bin_labels(g, bin_labels)
+        self.histo(g, show=show, bm=choose(bm, .24 if bin_labels else None), canvas=c, **kwargs)
         return g
 
-    def profile(self, x, y, binning=None, title='', thresh=.02, bm=None, lm=None, rm=None, w=1, h=1, show=True, draw_opt=None, logz=None, stats=None, **kwargs):
-        x, y = array(x, dtype='d'), array(y, dtype='d')
-        p = TProfile(Draw.get_name('p'), title, *choose(binning, find_bins, values=x, thresh=thresh))
-        fill_hist(p, x, y)
-        format_histo(p, **Draw.prepare_kwargs(kwargs, y_off=1.4, fill_color=Draw.FillColor, stats=stats))
-        self.histo(p, show=show, bm=bm, lm=lm, rm=rm, w=w, h=h, draw_opt=draw_opt, logz=logz, stats=stats)
+    def profile(self, x, y=None, binning=None, title='', thresh=.02, graph=False, **kwargs):
+        if y is None:
+            p = x
+        else:
+            x, y = array(x, dtype='d'), array(y, dtype='d')
+            p = TProfile(Draw.get_name('p'), title, *choose(binning, find_bins, values=x, q=thresh))
+            fill_hist(p, x, y)
+        p = self.make_graph_from_profile(p) if graph else p
+        set_statbox(entries=True, w=.25)
+        format_histo(p, **prep_kw(kwargs, **Draw.mode(), fill_color=Draw.FillColor))
+        self.histo(p, **prep_kw(kwargs, stats=True))
         return p
 
-    def prof2d(self, x, y, zz, binning=None, title='', lm=None, rm=.15, bm=None, w=1, h=1, show=True, phi=None, theta=None, draw_opt='colz', stats=None, **kwargs):
-        dflt_bins = make_bins(min(x), max(x), sqrt(len(x))) + make_bins(min(y), max(y), sqrt(len(y)))
-        p = TProfile2D(Draw.get_name('p2'), title, *choose(binning, dflt_bins))
-        fill_hist(p, x, y, uarr2n(zz))
-        format_histo(p, **Draw.prepare_kwargs(kwargs, y_off=1.4, z_off=1.2, pal=55, stats=stats))
-        set_statbox(entries=True, w=.2) if stats is None else do_nothing()
-        self.histo(p, show=show, lm=lm, rm=rm, bm=bm, w=w, h=h, phi=phi, theta=theta, draw_opt=draw_opt, stats=True if stats is None else stats)
+    def prof2d(self, x, y=None, zz=None, binning=None, title='', lm=None, rm=.17, bm=None, show=True, phi=None, theta=None, draw_opt='colz', stats=None,
+               rot=None, mirror=None, centre=None, **kwargs):
+        if y is None:
+            p = x
+        else:
+            dflt_bins = find_bins(x) + find_bins(y) if binning is None else None
+            p = TProfile2D(Draw.get_name('p2'), title, *choose(binning, dflt_bins))
+            fill_hist(p, x, y, uarr2n(zz))
+        p = self.rotate_2d(p, rot)
+        p = self.flip_2d(p, mirror)
+        rx, ry = get_2d_centre_ranges(p, centre)
+        format_histo(p, **prep_kw(kwargs, **Draw.mode(), z_off=1.2, pal=55, stats=stats, x_range=rx, y_range=ry))
+        set_statbox(entries=True, w=.25) if stats is None else do_nothing()
+        self.histo(p, show=show, lm=lm, rm=rm, bm=bm, phi=phi, theta=theta, draw_opt=draw_opt, stats=choose(stats, True), **kwargs)
         return p
 
-    def histo_2d(self, x, y, binning=None, title='', lm=None, rm=.15, bm=None, tm=None, show=True, logz=None, draw_opt='colz', stats=None, grid=None, canvas=None, w=1, h=1, gridy=None,
-                 **kwargs):
-        x, y = array(x, dtype='d'), array(y, dtype='d')
-        dflt_bins = make_bins(min(x), max(x), sqrt(x.size)) + make_bins(min(y), max(y), sqrt(x.size)) if binning is None else None
-        th = TH2F(Draw.get_name('h2'), title, *choose(binning, dflt_bins))
-        fill_hist(th, x, y)
-        format_histo(th, **Draw.prepare_kwargs(kwargs, y_off=1.4, z_off=1.2, z_tit='Number of Entries', stats=stats))
-        set_statbox(entries=True, w=.2) if stats is None else do_nothing()
-        self.histo(th, show=show, lm=lm, rm=rm, bm=bm, tm=tm, w=w, h=h, draw_opt=draw_opt, logz=logz, grid=grid, gridy=gridy, stats=choose(stats, True), canvas=canvas)
+    def histo_2d(self, x, y=None, binning=None, title='', lm=None, rm=.17, bm=None, tm=None, show=True, stats=None, canvas=None,
+                 rot=None, mirror=None, centre=None, **kwargs):
+        if y is None:
+            th = x
+        else:
+            x, y = array(x, dtype='d'), array(y, dtype='d')
+            dflt_bins = make_bins(min(x), max(x), sqrt(x.size)) + make_bins(min(y), max(y), sqrt(x.size)) if binning is None else None
+            th = TH2F(Draw.get_name('h2'), title, *choose(binning, dflt_bins))
+            fill_hist(th, x, y)
+        th = self.rotate_2d(th, rot)
+        th = self.flip_2d(th, mirror)
+        rx, ry = get_2d_centre_ranges(th, centre)
+        format_histo(th, **prep_kw(kwargs, **Draw.mode(), z_off=1.2, z_tit='Number of Entries', pal=55, stats=stats, x_range=rx, y_range=ry))
+        set_statbox(entries=True, w=.25) if stats is None else do_nothing()
+        self.histo(th, show=show, lm=lm, rm=rm, bm=bm, tm=tm, stats=choose(stats, True), canvas=canvas, **prep_kw(kwargs, draw_opt='colz'))
+        return th
+
+    def histo_3d(self, x, y, zz, binning, title='', **kwargs):
+        th = TH3F(Draw.get_name('h3'), title, *binning)
+        fill_hist(th, x, y, zz)
+        format_histo(th, **prep_kw(kwargs))
+        self.histo(th, **prep_kw(kwargs, draw_opt='colz', show=False))
         return th
 
     def efficiency(self, x, e, binning=None, title='Efficiency', lm=None, show=True, **kwargs):
-        binning = choose(binning, make_bins, min(x), max(x), (max(x) - min(x)) / sqrt(x.size))
         p = self.profile(x, e, binning, show=False)
         x = get_hist_args(p)
         y = array([calc_eff(p0 * n, n) for p0, n in [[p.GetBinContent(ibin), p.GetBinEntries(ibin)] for ibin in range(1, p.GetNbinsX() + 1)]])
         return self.graph(x, y, title, lm=lm, show=show, y_tit='Efficiency [%]', **kwargs)
 
-    def pull(self, h, binning=None, **kwargs):
-        x = get_hist_vec(h)
-        self.distribution(x, choose(binning, find_bins, values=x[x != 0], lfac=.2, rfac=.2, n=2), x_tit=h.GetYaxis().GetTitle(), **kwargs)
-        return mean_sigma(x[x != 0])
+    def pull(self, h, binning=None, ret_h=False, **kwargs):
+        x = get_graph_y(h, err=False) if is_graph(h) else get_hist_vec(h, err=False)
+        th = self.distribution(x, choose(binning, find_bins, values=x[x != 0], lfac=.5, rfac=.5, n=2), x_tit=h.GetYaxis().GetTitle(), **kwargs)
+        return th if ret_h else mean_sigma(x[x != 0])
 
     def stack(self, histos, title, leg_titles, scale=False, draw_opt='nostack', show=True, fill=None, w=.2, *args, **kwargs):
         s = THStack(Draw.get_name('s'), title)
@@ -453,28 +572,74 @@ class Draw(object):
         self.histo(s, draw_opt=draw_opt, leg=leg, lm=get_last_canvas().GetLeftMargin(), show=show)
         return s
 
-    def multigraph(self, graphs, title, leg_titles=None, bin_labels=None, x_tit=None, y_tit=None, draw_opt='p', gridy=None, lm=None, bm=None, show=True, logx=None, logy=None, color=True, c=None,
-                   y_range=None, w=1, grid=None, wleg=.2, *args, **kwargs):
-        g0 = graphs[0]
-        m = TMultiGraph(Draw.get_name('mg'), ';'.join([title, choose(x_tit, g0.GetXaxis().GetTitle()), choose(y_tit, g0.GetYaxis().GetTitle())]))
-        leg = None if leg_titles is None else Draw.make_legend(nentries=len(graphs), w=wleg)
-        for i, g in enumerate(graphs):
-            m.Add(g, draw_opt)
-            leg.AddEntry(g, leg_titles[i], 'p') if leg_titles is not None else do_nothing()
-            format_histo(g, color=self.get_color(len(graphs)) if color else None, stats=0, *args, **kwargs)
-        y_range = choose(y_range, ax_range(get_graph_y(graphs, err=False), 0, .3, .6))
-        format_histo(m, draw_first=True, y_off=g0.GetYaxis().GetTitleOffset(), x_tit=choose('', None, bin_labels), y_range=y_range)
+    def multigraph(self, graphs, title='', leg_titles=None, bin_labels=None, draw_opt='p', wleg=.2, **kwargs):
+        if hasattr(graphs, 'GetName'):
+            m, g = graphs, graphs.GetListOfGraphs()[0]
+        else:
+            g = graphs[0]
+            m = TMultiGraph(Draw.get_name('mg'), ';'.join([title, g.GetXaxis().GetTitle(), g.GetYaxis().GetTitle()]))
+            for i, g in enumerate(graphs):
+                m.Add(g, draw_opt)
+                format_histo(g, **prep_kw(kwargs, color=self.get_color(len(graphs)), stats=False))
+        y_range = ax_range(get_graph_y(graphs, err=False), 0, .3, .6)
+        format_histo(m, draw_first=True, **prep_kw(kwargs, **Draw.mode(1, y_off=g.GetYaxis().GetTitleOffset()), y_range=y_range, x_tit=choose('', None, bin_labels)))
         set_bin_labels(m, bin_labels)
-        m.GetListOfFunctions().Add(leg) if leg_titles is not None else do_nothing()
-        self.histo(m, draw_opt='ap', leg=leg, lm=lm, bm=choose(.26, bm, bin_labels), gridy=gridy, show=show, logx=logx, canvas=c, logy=logy, w=w, grid=grid)
+        leg = self.legend(graphs, leg_titles, 'p', w=wleg) if leg_titles else None
+        self.histo(m, leg=leg, **prep_kw(kwargs, bm=choose(.26, None, bin_labels), draw_opt='ap'))
         return m
+
+    def pie(self, labels, values=None, colors=None, title='', offset=0, show=True, flat=False, draw_opt=None, **kwargs):
+        labels, (values, colors) = (labels.keys(), array(list(labels.values())).T) if values is None else (labels, (values, choose(colors, Draw.get_colors(len(labels)))))
+        pie = TPie(self.get_name('pie'), title, len(labels), array(values, 'f'), array(colors, 'i'))
+        for i, label in enumerate(labels):
+            pie.SetEntryRadiusOffset(i, offset)
+            pie.SetEntryLabel(i, label)
+        format_pie(pie, **kwargs)
+        draw_opt = choose(draw_opt, f'{"" if flat else "3d"}rsc')
+        self.histo(pie, draw_opt=draw_opt, show=show)
+        return pie
+
+    def prof2hist(self, p):
+        bins = get_2d_bins(p)
+        h, nx, ny = self.histo_2d([], [], bins, show=False), bins[0], bins[2]
+        xax, yax = p.GetXaxis(), p.GetYaxis()
+        [h.Fill(xax.GetBinCenter(ix), yax.GetBinCenter(iy)) for ix in range(1, nx + 2) for iy in range(1, ny + 2) for _ in range(_get_2d_bin_entries(p, ix, iy, nx))]
+        return h
 
     @staticmethod
     def info(txt, c=None, size=.04):
         c = (get_last_canvas() if c is None else c).cd()
         Draw.tlatex(c.GetLeftMargin() + .02, 1 - (c.GetTopMargin() + .02), txt, align=13, ndc=True, size=size)
 
+    @staticmethod
+    def bin_numbers(h, show=True):
+        if show:
+            x, y = get_2d_bins(h, arr=True)
+            dx, dy = diff(x)[0] / 2, diff(y)[0] / 2
+            [Draw.tlatex(x[m] + dx, y[n] + dy, str((x.size - 1) * n + m)) for n in range(y.size - 1) for m in range(x.size - 1)]
+
     # endregion DRAW
+    # ----------------------------------------
+
+    # ----------------------------------------
+    # region OPERATIONS
+    def operate(self, h, f, *args, **kwargs):
+        h0, h = h, self.prof2d([], [], [], get_2d_bins(h), show=False)
+        prof = 'Profile' in h0.ClassName()
+        x, n = get_2d_hist_vec(h0, err=False, flat=False), get_2d_bin_entries(h0) if prof else 1
+        set_2d_values(h, f(x * n, *args, **kwargs))
+        set_2d_entries(h, f(n, *args, **kwargs)) if prof else do_nothing()
+        h.SetEntries(int(h0.GetEntries()))
+        format_histo(h, z_range=[h0.GetMinimum(), h0.GetMaximum()], **{f'{i}_tit': getattr(h0, f'Get{i.title()}axis')().GetTitle() for i in ['x', 'y', 'z']}, ncont=h0.GetContour())
+        return h
+
+    def rotate_2d(self, h, n=2):
+        return self.operate(h, rot90, n) if n is not None else h
+
+    def flip_2d(self, h, axis=0):
+        return self.operate(h, flip, axis=axis) if axis is not None else h
+
+    # endregion OPERATIONS
     # ----------------------------------------
 
     # ----------------------------------------
@@ -485,10 +650,11 @@ class Draw(object):
         return Draw.add(h)
 
     @staticmethod
-    def make_f(name, function, xmin=0, xmax=1, pars=None, limits=None, npx=None, **kwargs):
+    def make_f(name, function, xmin=0, xmax=1, pars=None, limits=None, fix=None, npx=None, **kwargs):
         f = TF1(choose(name, Draw.get_name('f')), function, xmin, xmax)
         f.SetParameters(*pars) if pars is not None else do_nothing()
         [f.SetParLimits(i, *lim) for i, lim in enumerate(limits)] if limits else do_nothing()
+        [f.FixParameter(i, value) for i, value in enumerate(make_list(fix))] if fix is not None else do_nothing()
         do(f.SetNpx, npx)
         format_histo(f, **kwargs)
         return Draw.add(f)
@@ -497,8 +663,7 @@ class Draw(object):
     def make_tf1(name, f, xmin=0, xmax=1, color=None, w=None, style=None, title='', npx=None, *args, **kwargs):
         def tmp(x, pars):
             _ = pars
-            # return f(x[0], pars, *args, **kwargs) if 'pars' in signature(f).parameters else f(x[0], *args, **kwargs)
-            return f(x[0], *args, **kwargs)
+            return f(x[0], pars, *args, **kwargs) if 'pars' in signature(f).parameters else f(x[0], *args, **kwargs)
 
         Draw.add(tmp)
         f0 = TF1(choose(name, Draw.get_name('f')), tmp, xmin, xmax)
@@ -515,27 +680,25 @@ class Draw(object):
         s, utypes, has_ers = len(x), [type(v[0]) in [Variable, AffineScalarFunc] for v in [x, y]], [len(v.shape) > 1 for v in [x, y]]
         ex, ey = [array([[v.s for v in vals]] if is_u and not asym else vals[:, 1:3].T if has_e else zeros((2, s)) if asym else [zeros(s)], 'd') for vals, is_u, has_e in zip([x, y], utypes, has_ers)]
         x, y = [array([v.n for v in vals] if utype else vals[:, 0] if has_e else vals, 'd') for vals, utype, has_e in zip([x, y], utypes, has_ers)]
-        g = (TGraphAsymmErrors if asym else TGraphErrors)(s, x, y, *array(ex.tolist() + ey.tolist()))  # doesn't work without double conversion...
-        kwargs['marker'] = 20 if 'marker' not in kwargs else kwargs['marker']
-        kwargs['markersize'] = 1 if 'markersize' not in kwargs else kwargs['markersize']
-        format_histo(g, Draw.get_name('g'), **kwargs)
+        g = (TGraphAsymmErrors if asym else TGraphErrors)(s, x, y, *array(ex.tolist()), *array(ey.tolist()))  # doesn't work without double conversion...
+        format_histo(g, Draw.get_name('g'), **prep_kw(kwargs, marker=20, markersize=1))
         return Draw.add(g)
 
     @staticmethod
     def make_graph_from_profile(p):
-        x_range = [i for i in range(p.GetNbinsX()) if p.GetBinContent(i)]
-        x = [ufloat(p.GetBinCenter(i), p.GetBinWidth(i) / 2) for i in x_range]
-        y = [ufloat(p.GetBinContent(i), p.GetBinError(i)) for i in x_range]
-        return Draw.make_tgrapherrors(x, y, x_tit=p.GetXaxis().GetTitle(), y_tit=p.GetYaxis().GetTitle())
+        x, y = get_hist_vecs(p)
+        return Draw.make_tgrapherrors(x[y != 0], y[y != 0], title=p.GetTitle(), x_tit=p.GetXaxis().GetTitle(), y_tit=p.GetYaxis().GetTitle())
 
     @staticmethod
-    def make_legend(x2=None, y2=None, w=.2, nentries=2, scale=1, y1=None, x1=None, clean=False, margin=.25, cols=None, fix=False):
-        x2, y2 = get_stat_margins(x2=x2, y2=y2)
-        x1 = choose(x1, x2 - w)
+    def make_legend(x2=None, y2=None, w=.25, nentries=2, scale=1, d=.01, y1=None, x1=None, clean=False, margin=.25, cols=None, fix=False, bottom=False, left=False):
+        use_margins = y2 is None
         h = nentries * .05 * scale
+        x2, y2 = get_stat_margins(None, x2, y2, d, bottom, left, h, w)
+        x1 = choose(x1, x2 - w)
         y1 = choose(y1, y2 - h)
-        y1 += .07 if not Draw.Title and y1 + h > .8 and not fix else 0
-        y1 -= .07 if not Draw.Legend and y1 < .3 and not fix else 0
+        if not use_margins:
+            y1 += .07 if not Draw.Title and y1 + h > .8 and not fix else 0
+            y1 -= .07 if not Draw.Legend and y1 < .3 and not fix else 0
         leg = TLegend(x1, max(y1, 0), x1 + w, min(y1 + h, 1))
         leg.SetName(Draw.get_name('l'))
         leg.SetTextFont(Draw.Font)
@@ -561,15 +724,16 @@ class Draw(object):
 def format_histo(histo, name=None, title=None, x_tit=None, y_tit=None, z_tit=None, marker=None, color=None, line_color=None, line_style=None, markersize=None, x_off=None, y_off=None, z_off=None,
                  lw=None, fill_color=None, fill_style=None, stats=None, tit_size=None, lab_size=None, l_off_y=None, l_off_x=None, draw_first=False, x_range=None, y_range=None, z_range=None,
                  sumw2=None, do_marker=True, style=None, ndivx=None, ndivy=None, ncont=None, tick_size=None, t_ax_off=None, center_y=False, center_x=False, yax_col=None, normalise=None, pal=None,
-                 rebin=None, y_ticks=None, x_ticks=None, z_ticks=None, opacity=None, center_tit=None):
+                 rebin=None, y_ticks=None, x_ticks=None, z_ticks=None, opacity=None, center_tit=None, **kwargs):
+    _ = kwargs
     h = histo
     if draw_first:
-        set_root_output(False)
+        Draw.set_show(False)
         h.Draw('nostack' if h.ClassName() == 'THStack' else 'a')
-        set_root_output(True)
+        Draw.set_show(True)
     do(h.SetTitle, title)
     do(h.SetName, name)
-    set_palette(custom=True) if pal is None else set_palette(pal)
+    set_palette(*make_list(pal) if pal is not None else [])
     if normalise is not None:
         y_tit = 'Frequency' if 'Number' in choose(y_tit, h.GetYaxis().GetTitle()) else choose(y_tit, h.GetYaxis().GetTitle())
         normalise_histo(h)
@@ -623,13 +787,16 @@ def set_entries():
     return True
 
 
-def get_stat_margins(c=None, x2=None, y2=None):
+def get_stat_margins(c=None, x2=None, y2=None, d=.01, bottom=False, left=False, h=0., w=0.):
     c = choose(c, get_last_canvas(warn=False))
     r = c.GetWindowHeight() / c.GetWindowWidth()
-    return choose(x2, 1 - c.GetRightMargin() - r * .01), choose(y2, 1 - c.GetTopMargin() - .01 / r)
+    x2 = choose(x2, c.GetLeftMargin() + w + d * r if left else 1 - c.GetRightMargin() - d * r)
+    y2 = choose(y2, c.GetBottomMargin() + h + d if bottom else 1 - c.GetTopMargin() - d)
+    return x2, y2
 
 
-def format_statbox(th, x2=None, y2=None, h=None, w=.3, entries=False, m=False, rms=False, all_stat=False, fit=False, center_x=False, center_y=False, form=None, c=None):
+def format_statbox(th, x2=None, y2=None, d=.01, h=None, w=.3, entries=False, m=False, rms=False, all_stat=False, fit=False, center_x=False,
+                   center_y=False, bottom=False, left=False, form=None, c=None):
     c = choose(c, get_last_canvas(warn=False))
     update_canvas(c)
     f = None if 'TF1' in th.ClassName() else next((o for o in th.GetListOfFunctions() if 'TF1' in o.ClassName()), None)
@@ -638,11 +805,11 @@ def format_statbox(th, x2=None, y2=None, h=None, w=.3, entries=False, m=False, r
     p = None if 'TF1' in th.ClassName() else next((o for o in th.GetListOfFunctions() if 'Pave' in o.ClassName()), None)
     if p is not None:
         r = c.GetWindowHeight() / c.GetWindowWidth()
-        x2, y2 = get_stat_margins(c, x2, y2)
-        cx, cy = mean([1 - c.GetRightMargin(), c.GetLeftMargin()]), mean([1 - c.GetTopMargin(), c.GetBottomMargin()])
         stats = ones(3, 'i') if all_stat else array([rms, m, entries], 'i')
         fit_pars = f.GetNpar() + 1 if fit and f is not None else 0
         h = choose(h, .05 / r * (stats.nonzero()[0].size + fit_pars))
+        x2, y2 = get_stat_margins(c, x2, y2, d, bottom, left, h, w)
+        cx, cy = mean([1 - c.GetRightMargin(), c.GetLeftMargin()]), mean([1 - c.GetTopMargin(), c.GetBottomMargin()])
         p.SetX1NDC(cx - w / 2 if center_x else x2 - w)
         p.SetX2NDC(cx + w / 2 if center_x else x2)
         p.SetY1NDC(cy - h / 2 if center_y else y2 - h)
@@ -707,6 +874,11 @@ def format_frame(frame):
 
 
 def fill_hist(h, x, y=None, zz=None):
+    if len(x) and is_ufloat(x[0]):
+        for i, v in enumerate(x, 1):
+            h.SetBinContent(i, v.n)
+            h.SetBinError(i, v.s)
+        return
     x, y, zz = array(x).astype('d'), array(y).astype('d'), array(zz).astype('d')
     if len(x.shape) > 1:
         y = array(x[:, 1])
@@ -720,8 +892,11 @@ def fill_hist(h, x, y=None, zz=None):
         h.FillN(x.size, x, ones(x.size))
     elif any(name in h.ClassName() for name in ['TH2', 'TProfile']):
         h.FillN(x.size, x, y, ones(x.size))
-    else:
+    elif h.ClassName() == 'TProfile2D':
         h.FillN(x.size, x, y, zz, ones(x.size))
+    else:
+        for i in range(x.size):
+            h.Fill(x[i], y[i], zz[i])
 
 
 def set_2d_ranges(h, dx, dy):
@@ -730,23 +905,29 @@ def set_2d_ranges(h, dx, dy):
     format_histo(h, x_range=[xmid - dx, xmid + dx], y_range=[ymid - dy, ymid + dx])
 
 
-def adapt_z_range(h, n_sigma=2):
-    values = get_2d_hist_vec(h)
-    m, s = mean_sigma(values[5:-5] if values.size > 20 else values, err=False)
-    z_range = [min(values).n, .8 * max(values).n] if s > m else [m - n_sigma * s, m + n_sigma * s]
-    format_histo(h, z_range=z_range)
+def find_bins(values, lfac=.2, rfac=.2, q=.02, n=1, lq=None, w=None, x0=None):
+    width, (xmin, xmax) = choose(w, freedman_diaconis(values) * n), find_range(values, lfac, rfac, q, lq)
+    bins = arange(choose(x0, xmin), xmax + width, width)
+    return [bins.size - 1, bins]
 
 
-def find_bins(values, thresh=.02, lfac=.2, rfac=.2, n=1):
-    a, b = find_range(values, lfac, rfac, thresh)
-    binning = linspace(a, b, int(n * sqrt(values.size)))
-    return [binning.size - 1, binning]
+def find_range(values, lfac=.2, rfac=.2, q=.02, lq=None):
+    return ax_range(*quantile(values, [choose(lq, q), 1 - q]), lfac, rfac)
 
 
-def find_range(values, lfac=.2, rfac=.2, thresh=.02):
-    v = array(sorted(uarr2n(values)))
-    xmin, xmax = v[int(thresh * v.size)], v[int(v.size - thresh * v.size)]
-    return ax_range(xmin, xmax, lfac, rfac)
+def fix_chi2(g, prec=.01, show=True):
+    it = 0
+    error = 2
+    chi2 = 0
+    fit = None
+    while abs(chi2 - 1) > prec and it < 20:
+        for i in range(g.GetN()):
+            g.SetPointError(i, g.GetErrorX(i), error)
+        fit = g.Fit('pol0', 'qs{}'.format('' if show else 0))
+        chi2 = fit.Chi2() / fit.Ndf()
+        error += .5 ** it * sign(chi2 - 1)
+        it += 1
+    return None if fit is None else FitRes(fit)
 
 
 def make_darray(values):
@@ -764,6 +945,11 @@ def make_box_args(x1, y1, x2, y2):
     return array([[x1, x1, x2, x2], [y1, y2, y2, y1]])
 
 
+def make_star(cx=0, cy=0, r=1, n=5):
+    coods = pol2cart(tile([r, r / (2 * cos(pi / n) + 1)], n), linspace(0, 2 * pi, 2 * n, endpoint=False) - pi / 2)
+    return (coods.T + array([cx, cy])).T
+
+
 def set_titles(status=True):
     gStyle.SetOptTitle(status)
 
@@ -773,23 +959,24 @@ def get_graph_vecs(g, err=True):
 
 
 def get_graph_x(g, err=True):
-    return array([ufloat(g.GetX()[i], g.GetEX()[i]) if err else g.GetX()[i] for i in range(g.GetN())])
+    return make_ufloat(frombuffer(g.GetX()), frombuffer(g.GetEX())) if err else frombuffer(g.GetX())
 
 
 def get_graph_y(g, err=True):
     if is_iter(g):
         return array([v for ig in g for v in get_graph_y(ig, err)])
-    return array([ufloat(g.GetY()[i], g.GetEY()[i]) if err else g.GetY()[i] for i in range(g.GetN())])
+    return make_ufloat(frombuffer(g.GetY()), frombuffer(g.GetEY())) if err else frombuffer(g.GetY())
 
 
 def get_hist_vec(p, err=True):
     return array([ufloat(p.GetBinContent(ibin), p.GetBinError(ibin)) if err else p.GetBinContent(ibin) for ibin in range(1, p.GetNbinsX() + 1)])
 
 
-def get_hist_args(h, err=True, raw=False):
+def get_hist_args(h, err=True, raw=False, axis='X'):
+    ax = getattr(h, f'Get{axis.title()}axis')()
     if raw:
-        return array([h.GetBinLowEdge(i) for i in range(1, h.GetNbinsX() + 2)], 'd')
-    return array([ufloat(h.GetBinCenter(ibin), h.GetBinWidth(ibin) / 2) if err else h.GetBinCenter(ibin) for ibin in range(1, h.GetNbinsX() + 1)])
+        return array([ax.GetBinLowEdge(i) for i in range(1, ax.GetNbins() + 2)], 'd')
+    return array([ufloat(ax.GetBinCenter(ibin), ax.GetBinWidth(ibin) / 2) if err else ax.GetBinCenter(ibin) for ibin in range(1, ax.GetNbins() + 1)])
 
 
 def get_hist_vecs(p, err=True, raw=False):
@@ -810,7 +997,35 @@ def get_2d_hist_vec(h, err=True, flat=True, zero_supp=True):
     xbins, ybins = range(1, h.GetNbinsX() + 1), range(1, h.GetNbinsY() + 1)
     values = array([ufloat(h.GetBinContent(xbin, ybin), h.GetBinError(xbin, ybin)) for ybin in ybins for xbin in xbins])
     values = values if err else array([v.n for v in values])
-    return (values[values != 0] if zero_supp else values) if flat else values.reshape(len(xbins), len(ybins))
+    return (values[values != 0] if zero_supp else values) if flat else values.reshape(len(ybins), len(xbins))
+
+
+def get_x_bins(h, err=True):
+    return get_hist_args(h, err, axis='X')
+
+
+def get_2d_bins(h, arr=False):
+    x, y = [get_hist_args(h, raw=True, axis=ax) for ax in ['X', 'Y']]
+    return [x, y] if arr else [x.size - 1, x, y.size - 1, y]
+
+
+def set_2d_values(h, arr):
+    [h.SetBinContent(ix + 1, iy + 1, arr[iy, ix]) for ix in range(arr.shape[1]) for iy in range(arr.shape[0])]
+
+
+def set_2d_entries(h, arr):
+    ny, nx = arr.shape
+    [h.SetBinEntries((nx + 2) * (iy + 1) + (ix + 1), arr[iy, ix]) for ix in range(nx) for iy in range(ny)]
+
+
+def _get_2d_bin_entries(h, ix, iy, nx):
+    return int(h.GetBinEntries((nx + 2) * iy + ix))
+
+
+def get_2d_bin_entries(h, flat=False):
+    nx, ny = h.GetNbinsX(), h.GetNbinsY()
+    entries = array([[_get_2d_bin_entries(h, ix, iy, nx) for ix in range(1, nx + 1)] for iy in range(1, ny + 1)])
+    return entries.flatten() if flat else entries
 
 
 def get_2d_args(h):
@@ -819,6 +1034,16 @@ def get_2d_args(h):
 
 def get_2d_vecs(h, err=True, flat=False):
     return get_2d_args(h), get_2d_hist_vec(h, err, flat)
+
+
+def get_3d_profiles(h, opt, err=True):
+    px, py = [], []
+    for ibin in range(1, h.GetNbinsX() + 1):
+        h.GetXaxis().SetRange(ibin, ibin + 1)
+        p = h.Project3D(opt)
+        px.append(deepcopy(p.ProfileX()))
+        py.append(deepcopy(p.ProfileY()))
+    return get_x_bins(h, err), px, py
 
 
 def get_h_entries(h):
@@ -905,7 +1130,7 @@ def show_line_styles():
 def ax_range(low=None, high=None, fl=0., fh=0., h=None, rnd=False, thresh=None):
     if type(low) in [list, ndarray]:
         utypes = [Variable, AffineScalarFunc]
-        if len(low) == 2:
+        if len(low) == 2 and not is_ufloat(low[0]):
             return ax_range(low[0], low[1], fl, fh)
         m, s = mean_sigma(low, err=0)
         v = low[absolute(low - m) < thresh * s] if thresh is not None else low
@@ -925,10 +1150,10 @@ def set_drawing_range(h, legend=True, lfac=None, rfac=None, thresh=None):
     for i in range(1, 4):
         h.SetBinContent(i, 0)
     thresh = choose(thresh, .05 * h.GetMaximum())
-    low, high = [h.GetBinCenter(i) for i in [h.FindFirstBinAbove(thresh), h.FindLastBinAbove(thresh)]]
+    range_ = [h.GetBinCenter(i) for i in [h.FindFirstBinAbove(thresh), h.FindLastBinAbove(thresh)]]
     lfac = lfac if lfac is not None else .2
     rfac = rfac if rfac is not None else .55 if legend else .1
-    h.GetXaxis().SetRangeUser(*ax_range(low, high, lfac, rfac))
+    h.GetXaxis().SetRangeUser(*ax_range(range_, lfac, rfac))
 
 
 def normalise_histo(histo, x_range=None, from_min=False):
@@ -948,12 +1173,37 @@ def normalise_bins(h):
     update_canvas()
 
 
-def make_bins(min_val, max_val=None, bin_width=1, last=False, n=None, off=0):
+def make_bins(min_val, max_val=None, bin_width=1, last=None, n=None, off=0):
     bins = array(min_val, 'd')
     if type(min_val) not in [ndarray, list]:
         min_val, max_val = choose(min_val, 0, decider=max_val), choose(max_val, min_val)
-        bins = append(arange(min_val, max_val, bin_width, dtype='d'), max_val if last else []) if n is None else linspace(min_val, max_val, int(n) + 1, endpoint=True)
+        last = [] if last is None else max_val if last == 1 else last
+        bins = append(arange(min_val, max_val, bin_width, dtype='d'), last) if n is None else linspace(min_val, max_val, int(n) + 1, endpoint=True)
     return [bins.size - 1, bins + off]
+
+
+def set_z_range(zmin, zmax):
+    c = get_last_canvas()
+    h = c.GetListOfPrimitives()[1]
+    h.GetZaxis().SetRangeUser(zmin, zmax)
+
+
+def set_axes_range(xmin, xmax, ymin, ymax, c=None):
+    set_x_range(xmin, xmax, c)
+    set_y_range(ymin, ymax, c)
+    update_canvas()
+
+
+def set_x_range(xmin, xmax, c=None):
+    c = choose(c, get_last_canvas())
+    h = c.GetListOfPrimitives()[1]
+    h.GetXaxis().SetRangeUser(xmin, xmax)
+
+
+def set_y_range(ymin, ymax, c=None):
+    c = choose(c, get_last_canvas())
+    h = c.GetListOfPrimitives()[1]
+    h.GetYaxis().SetRangeUser(ymin, ymax)
 
 
 def get_last_canvas(warn=True):
@@ -963,10 +1213,8 @@ def get_last_canvas(warn=True):
         warning('There is no canvas is in the list...', prnt=warn)
 
 
-def make_transparent(pad):
-    pad.SetFillStyle(4000)
-    pad.SetFillColor(0)
-    pad.SetFrameFillStyle(4000)
+def close_last_canvas():
+    get_last_canvas().Close()
 
 
 def get_object(name):
@@ -979,6 +1227,47 @@ def set_time_axis(histo, form='%H:%M', off=0):
     histo.GetXaxis().SetTimeFormat(form)
     histo.GetXaxis().SetTimeOffset(-off - 3600 if off else 0)
     histo.GetXaxis().SetTimeDisplay(1)
+
+
+def find_mpv_fwhm(histo, bins=15):
+    max_bin = histo.GetMaximumBin()
+    fit = TF1('fit', 'gaus', 0, 500)
+    histo.Fit('fit', 'qs0', '', histo.GetBinCenter(max_bin - bins), histo.GetBinCenter(max_bin + bins))
+    mpv = ufloat(fit.GetParameter(1), fit.GetParError(1))
+    fwhm = histo.FindLastBinAbove(fit(mpv.n) / 2) - histo.FindFirstBinAbove(fit(mpv.n) / 2)
+    return mpv, fwhm, mpv / fwhm
+
+
+def get_fw_center(h):
+    return mean(get_fwhm(h, ret_edges=True))  # center of FWHM as MPV
+
+
+def get_fwhm(h, fit_range=.8, ret_edges=False, err=True):
+    x, y = [f(get_hist_vec(h, err=False)) for f in [argsort, sorted]]
+    x, ymax = (x[-1] + 1, y[-1]) if y[-1] < 2 * y[-2] else (x[-2] + 1, y[-2])
+    fit_range = [f(ymax * fit_range) for f in [h.FindFirstBinAbove, h.FindLastBinAbove]]
+    fit_range = fit_range if diff(fit_range)[0] > 5 else (x + array([-5, 5])).tolist()
+    half_max = FitRes(h.Fit('gaus', 'qs0', '', *[h.GetBinCenter(i) for i in fit_range]))[0] * .5  # fit the top with a gaussian to get better maxvalue
+    half_max = ufloat(1, .05) * ymax / 2 if half_max > .9 * ymax else ufloat(1, .02) * half_max  # half max must be lower than max ...
+    low, high = [ufloat(v.n, v.s + abs(v.n - i.n)) for v, i in zip(_get_fwhm(h, half_max), _get_fwhm(h, half_max - half_max.s))]
+    return ((low, high) if err else (low.n, high.n)) if ret_edges else high - low
+
+
+def _get_fwhm(h, half_max):
+    blow, bhigh, w = h.FindFirstBinAbove(half_max.n), h.FindLastBinAbove(half_max.n), h.GetBinWidth(1)
+    low = get_x(h.GetBinCenter(blow - 1), h.GetBinCenter(blow), h.GetBinContent(blow - 1), h.GetBinContent(blow), half_max)
+    high = get_x(h.GetBinCenter(bhigh), h.GetBinCenter(bhigh + 1), h.GetBinContent(bhigh), h.GetBinContent(bhigh + 1), half_max)
+    return low, high
+
+
+def fit_fwhm(h, fitfunc='gaus', show=False, fit_range=.8):
+    low, high = get_fwhm(h, fit_range, ret_edges=True)
+    return FitRes(h.Fit(fitfunc, 'qs{}'.format('' if show else 0), '', low.n, high.n))
+
+
+def get_f_fwhm(f: TF1):
+    half_max = f.GetMaximum() / 2
+    return f.GetX(half_max, f.GetMaximumX(), 1e9) - f.GetX(half_max)
 
 
 def scale_histo(histo, value=None, to_max=False, x_range=None):
@@ -994,27 +1283,43 @@ def scale_histo(histo, value=None, to_max=False, x_range=None):
     return h
 
 
-def set_z_range(zmin, zmax):
+def find_2d_centre(h, thresh=.5):
+    px, py = h.ProjectionX(), h.ProjectionY()
+    return array([mean([p.GetBinCenter(b) for b in [p.FindFirstBinAbove(p.GetMaximum() * thresh), p.FindLastBinAbove(p.GetMaximum() * thresh)]]) for p in [px, py]])
+
+
+def get_2d_centre_ranges(h, dx, dy=None, thresh=.5):
+    if dx is None:
+        return None, None
+    cx, cy = find_2d_centre(h, thresh)
+    dx, dy = dx / 2, choose(dy, dx) / 2
+    return [cx - dx, cx + dx], [cy - dy, cy + dy]
+
+
+def centre_2d(h, dx, dy=None, thresh=.5):
     c = get_last_canvas()
-    h = c.GetListOfPrimitives()[1]
-    h.GetZaxis().SetRangeUser(zmin, zmax)
+    set_axes_range(*concatenate(get_2d_centre_ranges(h, dx, dy, thresh)), c)
 
 
-def set_axes_range(xmin, xmax, ymin, ymax):
-    set_x_range(xmin, xmax)
-    set_y_range(ymin, ymax)
+def make_transparent(pad):
+    pad.SetFillStyle(4000)
+    pad.SetFillColor(0)
+    pad.SetFrameFillStyle(4000)
 
 
-def set_x_range(xmin, xmax):
-    c = get_last_canvas()
-    h = c.GetListOfPrimitives()[1]
-    h.GetXaxis().SetRangeUser(xmin, xmax)
+def hide_axis(axis):
+    axis.SetTickLength(0)
+    axis.SetLabelOffset(99)
+    axis.SetTitleOffset(99)
 
 
-def set_y_range(ymin, ymax):
-    c = get_last_canvas()
-    h = c.GetListOfPrimitives()[1]
-    h.GetYaxis().SetRangeUser(ymin, ymax)
+def set_root_warnings(status):
+    gROOT.ProcessLine('gErrorIgnoreLevel = {e};'.format(e='0' if status else 'kError'))
+
+
+def set_root_output(status=True):
+    gROOT.SetBatch(not status)
+    set_root_warnings(status)
 
 
 if __name__ == '__main__':

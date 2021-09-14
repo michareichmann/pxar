@@ -11,7 +11,7 @@ PROJECT( pxar )
 # UPDATE THIS BEFORE RELEASING A SOURCE CODE TARBALL!
 SET(PXAR_VERSION "2.8.0")
 SET(PXAR_FW_VERSION "4.6")
-
+set (CMAKE_CXX_STANDARD 14)
 
 #########################################
 # pxar build options and their defaults #

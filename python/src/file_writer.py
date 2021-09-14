@@ -4,7 +4,7 @@
 # created on November 12th 2019 by M. Reichmann (remichae@phys.ethz.ch)
 # --------------------------------------------------------
 
-from utils import *
+from helpers.utils import *
 from os.path import join, dirname, realpath
 from glob import glob
 from ROOT import TF1
@@ -57,4 +57,3 @@ class FileWriter:
 
     def save_file(self):
         pass
-

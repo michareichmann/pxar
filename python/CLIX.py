@@ -4,13 +4,10 @@
 # add python and cython libs
 from os.path import join, dirname, realpath
 from sys import argv, path, stdout, exit
-pxar_dir = dirname(dirname(realpath(__file__)))
-path.insert(1, join(pxar_dir, 'lib'))
-path.insert(1, join(pxar_dir, 'python', 'src'))
 
-from utils import *
+from helpers.utils import *
 from numpy import zeros, array, mean, arange
-from pxar_helpers import *  # arity decorator, PxarStartup, PxarConfigFile, PxarParametersFile and others
+from helpers.pxar import *  # arity decorator, PxarStartup, PxarConfigFile, PxarParametersFile and others
 
 gui_available = has_root()
 if gui_available:
@@ -56,7 +53,7 @@ class PxarCoreCmd(cmd.Cmd):
         if gui and gui_available:
             self.window = PxarGui(gClient.GetRoot(), 800, 800)
         elif gui and not gui_available:
-            print "No GUI available (missing ROOT library)"
+            print("No GUI available (missing ROOT library)")
 
     def start_pbar(self, n):
         self.ProgressBar = ProgressBar(widgets=['Progress: ', Percentage(), ' ', Bar(marker='>'), ' ', ETA(), ' ', FileTransferSpeed()], maxval=n)
@@ -68,14 +65,14 @@ class PxarCoreCmd(cmd.Cmd):
         if isinstance(data, list):
             if not self.window:
                 for evt in data:
-                    print evt
+                    print(evt)
                 return
             for evt in data:
                 for px in evt.pixels:
                     pixels.append(px)
         else:
             if not self.window:
-                print data
+                print(data)
                 return
             for px in data.pixels:
                 pixels.append(px)
@@ -121,8 +118,8 @@ class PxarCoreCmd(cmd.Cmd):
         plot.Draw('COLZ')
         # draw margins of the rocs for the module
         if module:
-            for i in xrange(2):
-                for j in xrange(8):
+            for i in range(2):
+                for j in range(8):
                     rows, cols = self.NRows, self.NCols
                     x = array([cols * j, cols * (j + 1), cols * (j + 1), cols * j, cols * j], 'd')
                     y = array([rows * i, rows * i, rows * (i + 1), rows * (i + 1), rows * i], 'd')
@@ -185,7 +182,7 @@ class PxarCoreCmd(cmd.Cmd):
     def do_gui(self):
         """Open the ROOT results browser"""
         if not gui_available:
-            print "No GUI available (missing ROOT library)"
+            print("No GUI available (missing ROOT library)")
             return
         if self.window:
             return
@@ -204,7 +201,7 @@ class PxarCoreCmd(cmd.Cmd):
         except RuntimeError:
             return
         if verbose:
-            print "raw Event:\t\t", event
+            print("raw Event:\t\t", event)
         count = 0
         for i in event:
             i &= 0x0fff
@@ -213,7 +210,7 @@ class PxarCoreCmd(cmd.Cmd):
             event[count] = i
             count += 1
         if verbose:
-            print "converted Event:\t", event
+            print("converted Event:\t", event)
         return event
 
     # def translate_levels(self):
@@ -256,24 +253,24 @@ class PxarCoreCmd(cmd.Cmd):
 
     def enable_single_pixel(self, row=14, column=14, roc=None):
         """enableOnePixel [row] [column] [roc] : enables one Pixel (default 14/14); masks and disables the rest"""
-        print '--> disable and mask all pixels of all activated ROCs'
+        print('--> disable and mask all pixels of all activated ROCs')
         self.api.testAllPixels(0)
         self.api.maskAllPixels(1)
         self.api.testPixel(row, column, 1, roc)
         self.api.maskPixel(row, column, 0, roc)
         print_string = '--> enable and unmask Pixel {r}/{c}: '.format(r=row, c=column)
-        print_string += '(' + ','.join('ROC {n}: {a}/{m}'.format(n=roc, a=self.get_activated(roc)[0], m=self.get_activated(roc)[1]) for roc in xrange(self.api.getNEnabledRocs())) + ')'
-        print print_string
+        print_string += '(' + ','.join('ROC {n}: {a}/{m}'.format(n=roc, a=self.get_activated(roc)[0], m=self.get_activated(roc)[1]) for roc in range(self.api.getNEnabledRocs())) + ')'
+        print(print_string)
 
     def address_level_scan(self, triggers=1000, offset=0):
         self.api.daqStart()
         self.api.daqTrigger(triggers, 500)
         n_rocs = self.get_n_rocs()
         plotdata = zeros((n_rocs, 1024))
-        for _ in xrange(triggers):
+        for _ in range(triggers):
             event = self.converted_raw_event()
-            for roc in xrange(n_rocs):
-                for j in xrange(8):
+            for roc in range(n_rocs):
+                for j in range(8):
                     index = j + 9 * roc
                     if index % 9 == 2:  # skip the read back
                         continue
@@ -326,11 +323,11 @@ class PxarCoreCmd(cmd.Cmd):
         if len(data) == 3:
             for j in range(2):
                 header[j] = round(header[j] / float(it), 1)
-            print header
+            print(header)
         elif len(data) == 9:
             for j in range(5):
                 levels[j] = round(levels[j] / float(it), 1)
-            print levels
+            print(levels)
         self.api.daqStop()
 
     def rate(self, duration):
@@ -348,10 +345,10 @@ class PxarCoreCmd(cmd.Cmd):
                     all_trig += 1
                 except RuntimeError:
                     pass
-            print '\r{0:02.2f}'.format(triggers / (time() - trig_time)),
+            print('\r{0:02.2f}'.format(triggers / (time() - trig_time)), end=' ')
             sys.stdout.flush()
             t1 = time() - t
-        print "complete rate", '{0:02.2f}'.format(all_trig / (time() - t))
+        print("complete rate", '{0:02.2f}'.format(all_trig / (time() - t)))
         # print time.time()-t
         self.api.daqStop()
 
@@ -382,12 +379,12 @@ class PxarCoreCmd(cmd.Cmd):
 
     def scan_vcal(self, ctrl_reg, ntrig=10):
         self.api.setDAC('ctrlreg', ctrl_reg)
-        for vcal in xrange(0, 256):
+        for vcal in range(0, 256):
             self.api.setDAC('vcal', vcal)
             self.api.daqTrigger(ntrig, 500)
         data = self.api.daqGetEventBuffer()
         values = [[]] * 256
-        for i in xrange(256):
+        for i in range(256):
             values[i] = [px.value for evt in data[(i * ntrig):((i + 1) * ntrig)] for px in evt.pixels]
         return OrderedDict({vcal: mean(lst) for vcal, lst in enumerate(values) if lst})
 
@@ -395,15 +392,15 @@ class PxarCoreCmd(cmd.Cmd):
     def find_factor(low_vals, high_vals):
         gr = TGraph()
         vals = {}
-        for i, scale in enumerate(xrange(600, 800)):
-            vcals = low_vals.keys() + [scale / 100. * key for key in high_vals.keys()]
-            values = low_vals.values() + high_vals.values()
+        for i, scale in enumerate(range(600, 800)):
+            vcals = list(low_vals.keys()) + [scale / 100. * key for key in list(high_vals.keys())]
+            values = list(low_vals.values()) + list(high_vals.values())
             g = Plotter.create_graph(vcals, values)
-            fit = g.Fit('pol1', 'qs', '', vcals[0], low_vals.keys()[-1])
+            fit = g.Fit('pol1', 'qs', '', vcals[0], list(low_vals.keys())[-1])
             gr.SetPoint(i, scale / 100., fit.Chi2())
             vals[fit.Chi2()] = scale / 100.
         xmin = vals[min(vals.keys())]
-        print xmin
+        print(xmin)
         return xmin
 
     def trim_ver(self, vec_trim, ntrig, start=0, loops=40):
@@ -429,8 +426,8 @@ class PxarCoreCmd(cmd.Cmd):
     def print_activated(self, roc=None):
         active = self.api.getNEnabledPixels() if roc is None else self.api.getNEnabledPixels(roc)
         masked = self.api.getNMaskedPixels() if roc is None else self.api.getNMaskedPixels(roc)
-        print 'Pixels active: {n}'.format(n=active)
-        print 'Pixels masked: {n}'.format(n=masked)
+        print('Pixels active: {n}'.format(n=active))
+        print('Pixels masked: {n}'.format(n=masked))
 
     def get_activated(self, roc=None):
         return (self.api.getNEnabledPixels(), self.api.getNMaskedPixels()) if roc is None else (self.api.getNEnabledPixels(roc), self.api.getNMaskedPixels(roc))
@@ -450,7 +447,7 @@ class PxarCoreCmd(cmd.Cmd):
         """ do_triggerLoop [rate] [duration]: sends triggers with rate for duration"""
         self.api.daqStart()
         triggers = int(60 * duration) * rate
-        print "number of triggers:", triggers
+        print("number of triggers:", triggers)
         for i in range(triggers):
             self.api.daqTrigger(1, 500)
             sleep(float(1) / rate)
@@ -458,10 +455,10 @@ class PxarCoreCmd(cmd.Cmd):
             #            print "", '\r{0:4.2f}%'.format(100*(float(i)/nTrig)), "\r",
             sec = (triggers - i) / float(rate) % 60
             min_val = (triggers - i) / rate / 60
-            print "", '\r{0:02d}:'.format(min_val), '\b{0:02d}:'.format(int(sec)), '\b{0:02.0f}'.format(
-                100 * (sec - int(sec))),
+            print("", '\r{0:02d}:'.format(min_val), '\b{0:02d}:'.format(int(sec)), '\b{0:02.0f}'.format(
+                100 * (sec - int(sec))), end=' ')
             sys.stdout.flush()
-        print
+        print()
         self.api.daqStop()
 
     def complete_trigger_loop(self):
@@ -474,18 +471,18 @@ class PxarCoreCmd(cmd.Cmd):
         """ do_triggerLoop [rate] [duration]: sends triggers with rate for duration"""
         self.api.daqStart()
         triggers = int(60 * duration) * rate
-        print "number of triggers:", triggers
+        print("number of triggers:", triggers)
         for i in range(triggers):
             t = time()
             self.api.daqTrigger(1, 500)
             sec = (triggers - i) / float(rate) % 60
             min_val = (triggers - i) / rate / 60
-            print "", '\r{0:02d}:'.format(min_val), '\b{0:02d}:'.format(int(sec)), '\b{0:02.0f}'.format(
-                100 * (sec - int(sec))),
+            print("", '\r{0:02d}:'.format(min_val), '\b{0:02d}:'.format(int(sec)), '\b{0:02.0f}'.format(
+                100 * (sec - int(sec))), end=' ')
             sys.stdout.flush()
             while time() - t < 1. / rate:
                 sleep(.01)
-        print
+        print()
         self.api.daqStop()
 
     def complete_test_loop(self):
@@ -499,7 +496,7 @@ class PxarCoreCmd(cmd.Cmd):
 
     @staticmethod
     def elapsed_time(start):
-        print 'elapsed time:', '{0:0.2f}'.format(time() - start), 'seconds'
+        print('elapsed time:', '{0:0.2f}'.format(time() - start), 'seconds')
 
     @staticmethod
     def code_event(row, col, number):
@@ -559,7 +556,7 @@ class PxarCoreCmd(cmd.Cmd):
         return dec
 
     def eff_check(self, ntrig=10, col=14, row=14, vcal=200):
-        print 'checking pixel with col {c} and row {r}'.format(c=col, r=row)
+        print('checking pixel with col {c} and row {r}'.format(c=col, r=row))
         self.api.HVon()
         self.api.setDAC('vcal', vcal)
         self.enable_pix(col, row)
@@ -572,13 +569,13 @@ class PxarCoreCmd(cmd.Cmd):
         for ev in data:
             for px in ev.pixels:
                 if ntrig <= 50:
-                    print px,
+                    print(px, end=' ')
                 if px.column == col and px.row == row and len(ev.pixels) == 1:
                     good_events += 1
             if ntrig <= 50:
-                print
+                print()
         eff = 100 * good_events / float(ntrig)
-        print '\nEFFICIENCY:\n  {e}/{t} ({p:5.2f}%)'.format(e=good_events, t=ntrig, p=eff)
+        print('\nEFFICIENCY:\n  {e}/{t} ({p:5.2f}%)'.format(e=good_events, t=ntrig, p=eff))
         # self.api.HVoff()
         # self.api.daqStop()
         return eff
@@ -588,7 +585,7 @@ class PxarCoreCmd(cmd.Cmd):
         if dac in dacs:
             return dacs[dac]
         else:
-            print 'Unknown dac {d}!'.format(d=dac)
+            print('Unknown dac {d}!'.format(d=dac))
 
     def mask_edges(self, enable=1, rocid=0):
         for col, row in [(0, 0), (51, 0), (0, 79), (51, 79)]:
@@ -600,11 +597,11 @@ class PxarCoreCmd(cmd.Cmd):
         read_back = sum(px.value for px in data)
         total = n_trig * (unmasked if unmasked < active else active)
         eff = 100. * read_back / total
-        print 'Efficiency: {eff:6.2f}% ({rb:5d}/{tot:5d})'.format(eff=eff, rb=int(read_back), tot=total)
+        print('Efficiency: {eff:6.2f}% ({rb:5d}/{tot:5d})'.format(eff=eff, rb=int(read_back), tot=total))
         return eff
 
     def dac_dac_scan(self, dac1name="caldel", dac1step=1, dac1min=0, dac1max=255, dac2name="vthrcomp", dac2step=1, dac2min=0, dac2max=255, flags=0, n_triggers=10):
-        for roc in xrange(self.api.getNEnabledRocs()):
+        for roc in range(self.api.getNEnabledRocs()):
             self.api.testAllPixels(0)
             self.api.testPixel(14, 14, 1, roc)
             data = self.api.getEfficiencyVsDACDAC(dac1name, dac1step, dac1min, dac1max, dac2name, dac2step, dac2min, dac2max, flags, n_triggers)
@@ -615,29 +612,29 @@ class PxarCoreCmd(cmd.Cmd):
     @staticmethod
     def decode_header(string):
         num = int('0x' + string, 0)
-        print 'Decoding Header:'
-        print '    MMMM 0111 1111 10RB'
+        print('Decoding Header:')
+        print('    MMMM 0111 1111 10RB')
         bin_str = bin(num).replace('0b', '')
-        print 'bin {w}'.format(w=' '.join([bin_str[i:i + 4] for i in xrange(0, len(bin_str), 4)]))
-        print 'hex    {w}'.format(w='    '.join(list(string)))
-        print 'header identifier: {hi} {eq} 0x7f8'.format(hi=hex(num & 0x0ffc), eq='=' if (num & 0x0ffc) == 0x7f8 else '!=')
+        print('bin {w}'.format(w=' '.join([bin_str[i:i + 4] for i in range(0, len(bin_str), 4)])))
+        print('hex    {w}'.format(w='    '.join(list(string))))
+        print('header identifier: {hi} {eq} 0x7f8'.format(hi=hex(num & 0x0ffc), eq='=' if (num & 0x0ffc) == 0x7f8 else '!='))
         return (num & 0x0ffc) == 0x7f8
 
     @staticmethod
     def decode_pixel(lst):
         col, row = None, None
-        for i in xrange(0, len(lst), 2):
-            print '\nDecoding Pixel Hit {n}'.format(n=i / 2 + 1)
+        for i in range(0, len(lst), 2):
+            print('\nDecoding Pixel Hit {n}'.format(n=i / 2 + 1))
             string = lst[i] + lst[i + 1]
             raw = int('0x{s}'.format(s=lst[i] + lst[i + 1]), 0)
-            print '    0000 CCC0 CCCR RRR0 MMMM RRRP PPP0 PPPP'
+            print('    0000 CCC0 CCCR RRR0 MMMM RRRP PPP0 PPPP')
             bin_str = bin(raw).replace('0b', '').zfill(32)
-            print 'bin {w}'.format(w=' '.join([bin_str[j:j + 4] for j in xrange(0, len(bin_str), 4)]))
-            print 'hex    {w}'.format(w='    '.join(list(string)))
+            print('bin {w}'.format(w=' '.join([bin_str[j:j + 4] for j in range(0, len(bin_str), 4)])))
+            print('hex    {w}'.format(w='    '.join(list(string))))
             ph = (raw & 0x0f) + ((raw >> 1) & 0xf0)
             col = ((raw >> 21) & 0x07) + ((raw >> 22) & 0x38)
             row = ((raw >> 9) & 0x07) + ((raw >> 14) & 0x78)
-            print '===== [{c}, {r}, {p}] ====='.format(c=col, r=row, p=ph)
+            print('===== [{c}, {r}, {p}] ====='.format(c=col, r=row, p=ph))
             if lst[i + 1].startswith('4'):
                 break
         return col, row
@@ -656,7 +653,7 @@ class PxarCoreCmd(cmd.Cmd):
             except RuntimeError:
                 pass
             t1 = duration - time() + t
-            print '\rTime left: {m:02d}:{s:02d}\tCounts: {c:05d}'.format(m=int(t1 / 60), s=int(t1 % 60), c=counts),
+            print('\rTime left: {m:02d}:{s:02d}\tCounts: {c:05d}'.format(m=int(t1 / 60), s=int(t1 % 60), c=counts), end=' ')
             sys.stdout.flush()
         self.api.daqStop()
         return counts
@@ -669,11 +666,11 @@ class PxarCoreCmd(cmd.Cmd):
     def mask_frame(self, pix=1):
         self.api.maskAllPixels(1)
         self.api.testAllPixels(1)
-        print '--> mask and enable all pixels!'
+        print('--> mask and enable all pixels!')
         for i in range(pix, 52 - pix):
             for j in range(pix, 80 - pix):
                 self.api.maskPixel(i, j, 0)
-        print '--> masking frame of {n} pixels'.format(n=pix)
+        print('--> masking frame of {n} pixels'.format(n=pix))
 
     def set_pg(self, cal=True, res=True, trg=True, delay=None):
         """ Sets up the trigger pattern generator for ROC testing """
@@ -692,8 +689,8 @@ class PxarCoreCmd(cmd.Cmd):
         # print pg_setup
         try:
             self.api.setPatternGenerator(tuple(pg_setup))
-        except RuntimeError, err:
-            print err
+        except RuntimeError as err:
+            print(err)
 
     def clear_buffer(self):
         try:
@@ -704,9 +701,9 @@ class PxarCoreCmd(cmd.Cmd):
     def get_mean_black_levels(self, avg=100):
         n_rocs = self.api.getNRocs()
         self.api.daqTrigger(avg, 500)
-        events = [self.converted_raw_event() for _ in xrange(avg)]
-        b_levels = [[event[i] for event in events] for i in xrange(1, 3 * n_rocs, 3)]
-        ub_levels = [[event[i] for event in events] for i in xrange(0, 3 * n_rocs, 3)]
+        events = [self.converted_raw_event() for _ in range(avg)]
+        b_levels = [[event[i] for event in events] for i in range(1, 3 * n_rocs, 3)]
+        ub_levels = [[event[i] for event in events] for i in range(0, 3 * n_rocs, 3)]
         b = [mean(l) for l in b_levels]
         ub = [mean(l) for l in ub_levels]
         return b, ub
@@ -714,8 +711,8 @@ class PxarCoreCmd(cmd.Cmd):
     def get_mean_levels(self, avg=1000):
         n_rocs = self.api.getNRocs()
         self.api.daqTrigger(avg, 500)
-        events = [self.converted_raw_event() for _ in xrange(avg)]
-        levels = [[mean([event[i] for event in events]) for i in (arange(8) + 9 * roc) if i % 9 != 2] for roc in xrange(n_rocs)]
+        events = [self.converted_raw_event() for _ in range(avg)]
+        levels = [[mean([event[i] for event in events]) for i in (arange(8) + 9 * roc) if i % 9 != 2] for roc in range(n_rocs)]
         return levels
 
     def get_mean_levels_pix(self, col, row, avg=1000):
@@ -733,8 +730,8 @@ class PxarCoreCmd(cmd.Cmd):
         l4 = [mean(lst[3:5] + lst[-1:]) for lst in self.get_mean_levels_pix(44, 0)]
         l5 = [mean(lst[3:4] + lst[-2:]) for lst in self.get_mean_levels_pix(35, 9)]
         levels = [l0, l1, l2, l3, l4, l5]
-        levels = [[lst[i] for lst in levels] for i in xrange(len(levels[0]))]
-        return [[(lst[i] + lst[i - 1]) / 2 for i in xrange(1, 6)] for lst in levels]
+        levels = [[lst[i] for lst in levels] for i in range(len(levels[0]))]
+        return [[(lst[i] + lst[i - 1]) / 2 for i in range(1, 6)] for lst in levels]
 
     def save_splittings(self):
         config_file = join(self.dir, 'configParameters.dat')
@@ -759,7 +756,7 @@ class PxarCoreCmd(cmd.Cmd):
         l0 = raw_event[1] + offset
         l1 = (l0 - raw_event[0]) / 4
         ls = l1 / 2
-        print l1, ls, offset
+        print(l1, ls, offset)
         return [self.translate_level(level, l1, ls) for level in raw_event[3:8]]
 
     def find_decoding_offset(self, roc):
@@ -772,8 +769,8 @@ class PxarCoreCmd(cmd.Cmd):
         l0 = b + offset
         l1 = (ub - l0) / 4
         s = l1 / 2
-        print l0, l1, s
-        print offset
+        print(l0, l1, s)
+        print(offset)
         self.enable_single_pixel(17, 12)
         self.api.daqStart()
         levels = self.get_mean_levels()[roc]
@@ -790,7 +787,7 @@ class PxarCoreCmd(cmd.Cmd):
     @arity(0, 0, [])
     def do_getTBia(self):
         """getTBia: returns analog DTB current"""
-        print "Analog Current: ", (self.api.getTBia() * 1000), " mA"
+        print("Analog Current: ", (self.api.getTBia() * 1000), " mA")
 
     def complete_getTBia(self):
         # return help for the cmd
@@ -816,7 +813,7 @@ class PxarCoreCmd(cmd.Cmd):
     @arity(0, 0, [])
     def do_getTBid(self):
         """getTBia: returns analog DTB current"""
-        print "Digital Current: ", (self.api.getTBid() * 1000), " mA"
+        print("Digital Current: ", (self.api.getTBid() * 1000), " mA")
 
     def complete_getTBid(self):
         # return help for the cmd
@@ -826,9 +823,9 @@ class PxarCoreCmd(cmd.Cmd):
     def do_setExternalClock(self, enable=1):
         """setExternalClock [enable]: enables the external DTB clock input, switches off the internal clock. Only switches if external clock is present."""
         if self.api.setExternalClock(enable) is True:
-            print "Switched to " + ("external" if enable else "internal") + " clock."
+            print("Switched to " + ("external" if enable else "internal") + " clock.")
         else:
-            print "Could not switch to " + ("external" if enable else "internal") + " clock!"
+            print("Could not switch to " + ("external" if enable else "internal") + " clock!")
 
     def complete_setExternalClock(self):
         # return help for the cmd
@@ -905,13 +902,13 @@ class PxarCoreCmd(cmd.Cmd):
         try:
             f = open(filename)
         except IOError:
-            print "Error: cannot open file '" + filename + "'"
+            print("Error: cannot open file '" + filename + "'")
             exit()
             return
         try:
             for line in f:
                 if not line.startswith("#") and not line.isspace():
-                    print line.replace('\n', ' ').replace('\r', '')
+                    print(line.replace('\n', ' ').replace('\r', ''))
                     self.onecmd(line)
         finally:
             f.close()
@@ -1113,9 +1110,9 @@ class PxarCoreCmd(cmd.Cmd):
     def do_daqTriggerSource(self, source, freq=0):
         """daqTriggerSource: select the trigger source to be used for the DAQ session"""
         if self.api.daqTriggerSource(source, 40000000 / freq if freq else 0):
-            print "Trigger source \"" + source + "\" selected."
+            print("Trigger source \"" + source + "\" selected.")
         else:
-            print "DAQ returns faulty state."
+            print("DAQ returns faulty state.")
 
     def complete_daqTriggerSource(self, text, line, start_index, end_index):
         # return help for the cmd
@@ -1129,7 +1126,7 @@ class PxarCoreCmd(cmd.Cmd):
         self.api.daqStart()
         self.api.daqTrigger(1, 500)
         self.api.daqStop()
-        print 'Trigger loop with frequency of {f}Hz {m}'.format(f=freq, m='started' if on else 'stopped')
+        print('Trigger loop with frequency of {f}Hz {m}'.format(f=freq, m='started' if on else 'stopped'))
 
     def complete_triggerLoop(self):
         # return help for the cmd
@@ -1140,7 +1137,7 @@ class PxarCoreCmd(cmd.Cmd):
         """daqGetEvent [convert]: read one converted event from the event buffer, for convert = 0 it will print the addresslevels"""
         try:
             data = self.api.daqGetEvent()
-            print data
+            print(data)
         except RuntimeError:
             pass
 
@@ -1153,18 +1150,18 @@ class PxarCoreCmd(cmd.Cmd):
         """daqGetRawEvent [convert]: read one converted event from the event buffer, for convert = 0 it will print the addresslevels"""
         if convert == 1:
             data = self.converted_raw_event()
-            print data
+            print(data)
         elif convert == 2:
             data = self.get_levels(True)
-            print data
+            print(data)
         elif convert == 0:
             data = self.api.daqGetRawEvent()
-            print data
+            print(data)
         elif convert == 3:
             data = self.converted_raw_event()
-            print "UB", data[0], "\tlength", len(data)
+            print("UB", data[0], "\tlength", len(data))
         elif convert == 4:
-            print ' '.join(hex(word)[2:].rjust(4, '0') for word in self.api.daqGetRawEvent())
+            print(' '.join(hex(word)[2:].rjust(4, '0') for word in self.api.daqGetRawEvent()))
 
     def complete_daqGetRawEvent(self, text, line, start_index, end_index):
         # return help for the cmd
@@ -1190,7 +1187,7 @@ class PxarCoreCmd(cmd.Cmd):
                 if i & 0x0FF0 == 0x07f0:
                     s += "\n"
                     s += '{:04x}'.format(i) + " "
-                    print s
+                    print(s)
         except RuntimeError:
             pass
 
@@ -1204,9 +1201,9 @@ class PxarCoreCmd(cmd.Cmd):
         data = []
         try:
             data = self.api.daqGetEventBuffer()
-            print data[0]
+            print(data[0])
             for i in data:
-                print i
+                print(i)
                 # self.plot_eventdisplay(data)
         except RuntimeError:
             pass
@@ -1220,7 +1217,7 @@ class PxarCoreCmd(cmd.Cmd):
         """daqGetEventBuffer: read all decoded events from the DTB buffer"""
         try:
             data = self.api.daqGetEventBuffer()
-            print len(data)
+            print(len(data))
         except RuntimeError:
             pass
 
@@ -1232,9 +1229,9 @@ class PxarCoreCmd(cmd.Cmd):
     def do_daqStatus(self):
         """daqStatus: reports status of the running DAQ session"""
         if self.api.daqStatus():
-            print "DAQ session is fine"
+            print("DAQ session is fine")
         else:
-            print "DAQ session returns faulty state"
+            print("DAQ session returns faulty state")
 
     def complete_daqStatus(self):
         # return help for the cmd
@@ -1251,8 +1248,8 @@ class PxarCoreCmd(cmd.Cmd):
     @arity(0, 1, [int])
     def do_getRocDacs(self, roc_id=0):
         """ shows the current settings for dacs"""
-        for dac, value in self.api.getRocDACs(roc_id).iteritems():
-            print dac, value
+        for dac, value in self.api.getRocDACs(roc_id).items():
+            print(dac, value)
 
     def complete_getRocDacs(self):
         # return help for the cmd
@@ -1261,7 +1258,7 @@ class PxarCoreCmd(cmd.Cmd):
     @arity(1, 2, [str, int])
     def do_getDAC(self, dac, roc_id=0):
         """ shows the current settings for dacs"""
-        print '{d}: {v}'.format(d=dac, v=self.get_dac(dac, roc_id))
+        print('{d}: {v}'.format(d=dac, v=self.get_dac(dac, roc_id)))
 
     def complete_getDAC(self):
         # return help for the cmd
@@ -1270,8 +1267,8 @@ class PxarCoreCmd(cmd.Cmd):
     @arity(0, 1, [str])
     def do_getTestboardDelays(self, delay=None):
         """ shows the current settings for dacs"""
-        for dac, value in self.api.getTestboardDelays().iteritems():
-            print dac, value
+        for dac, value in self.api.getTestboardDelays().items():
+            print(dac, value)
 
     def complete_getTestboardDelays(self):
         # return help for the cmd
@@ -1288,7 +1285,7 @@ class PxarCoreCmd(cmd.Cmd):
     @arity(2, 2, [str, int])
     def do_set_tb_delay(self, dacname, value):
         """setTBdelays [delay] [value]: sets a single test board delay to a certain value"""
-        print "set TB DACs: ", dacname, value
+        print("set TB DACs: ", dacname, value)
         self.api.setTestboardDelays({dacname: value})
 
     def complete_set_tb_delay(self):
@@ -1298,8 +1295,8 @@ class PxarCoreCmd(cmd.Cmd):
     @arity(0, 2, [int, int])
     def do_set_tin_tout(self, tin=14, tout=8):
         """setTinTout [tin] [tout]: sets tindelay to value tin and toutdelay to tout"""
-        print "set tindelay to: ", tin
-        print "set toutdelay to: ", tout
+        print("set tindelay to: ", tin)
+        print("set toutdelay to: ", tout)
         self.api.setTestboardDelays({"tindelay": tin, "toutdelay": tout})
 
     def complete_set_tin_tout(self):
@@ -1309,7 +1306,7 @@ class PxarCoreCmd(cmd.Cmd):
     @arity(1, 1, [int])
     def do_setClockDelays(self, value):
         """SetClockDelays [value of clk and ctr]: sets the two TB delays clk and ctr """
-        print "TB delays clk and ctr set to: ", value
+        print("TB delays clk and ctr set to: ", value)
         self.set_clock(value)
 
     def complete_setClockDelays(self):
@@ -1323,38 +1320,38 @@ class PxarCoreCmd(cmd.Cmd):
         n_rocs = self.api.getNRocs()
         self.set_pg(cal=False, res=True)
         self.api.daqStart()
-        print '\nCLK',
-        for i in xrange(8):
-            print '{:2d} '.format(i),
-        print
+        print('\nCLK', end=' ')
+        for i in range(8):
+            print('{:2d} '.format(i), end=' ')
+        print()
         good = []
-        for clk in xrange(20):
+        for clk in range(20):
             if clk in []:
                 continue
             self.set_clock(clk)
-            print '{:2d}:'.format(clk),
-            for phase in xrange(8):
+            print('{:2d}:'.format(clk), end=' ')
+            for phase in range(8):
                 self.api.setTestboardDelays({'deser160phase': phase})
                 # self.api.setTestboardDelays({'clk': clk})
                 self.api.daqTrigger(n, 300)
-                evts = [self.converted_raw_event() for i in xrange(n)]
-                eff = mean([1 if ev is not None and len(ev) == n_rocs and all(header in xrange(2040, 2044) for header in ev) else 0 for ev in evts])
+                evts = [self.converted_raw_event() for i in range(n)]
+                eff = mean([1 if ev is not None and len(ev) == n_rocs and all(header in range(2040, 2044) for header in ev) else 0 for ev in evts])
                 if eff == 1:
                     good.append((clk, phase))
-                    print '{c}{eff:1.1f}{e}'.format(eff=eff, c=GREEN, e=ENDC),
+                    print('{c}{eff:1.1f}{e}'.format(eff=eff, c=GREEN, e=ENDC), end=' ')
                 elif eff > .5:
-                    print '{c}{eff:1.1f}{e}'.format(eff=eff, c=YELLOW, e=ENDC),
+                    print('{c}{eff:1.1f}{e}'.format(eff=eff, c=YELLOW, e=ENDC), end=' ')
                 elif eff > 0:
-                    print '{c}{eff:1.1f}{e}'.format(eff=eff, c=RED, e=ENDC),
+                    print('{c}{eff:1.1f}{e}'.format(eff=eff, c=RED, e=ENDC), end=' ')
                 else:
-                    print ' - ',
-            print
+                    print(' - ', end=' ')
+            print()
         if not good:
             'Did not find any good timing...'
             return
         clk, phase = good[(len(good) / 2)]
         self.set_pg(cal=True, res=True)
-        print 'Set CLK/DESER160PHASE to: {}/{}'.format(clk, phase)
+        print('Set CLK/DESER160PHASE to: {}/{}'.format(clk, phase))
         self.set_clock(clk)
         self.api.setTestboardDelays({'deser160phase': phase})
 
@@ -1365,7 +1362,7 @@ class PxarCoreCmd(cmd.Cmd):
     @arity(2, 2, [int, int])
     def do_setClkDeser(self, clk, phase):
         """SetClockDelays [value of clk and ctr]: sets the two TB delays clk and ctr """
-        print "TB delays clk and ctr set to: ", clk
+        print("TB delays clk and ctr set to: ", clk)
         self.set_clock(clk)
         self.api.setTestboardDelays({'deser160phase': phase})
 
@@ -1388,7 +1385,7 @@ class PxarCoreCmd(cmd.Cmd):
         header = [0, 0]
 
         # find the address levels
-        print "get level splitting:"
+        print("get level splitting:")
         for roc in range(n_rocs):
             self.api.maskAllPixels(1, roc)
             self.api.testAllPixels(0, roc)
@@ -1439,12 +1436,12 @@ class PxarCoreCmd(cmd.Cmd):
                 spread_black[roc].append(sum_spread / float(n_triggers))
                 for i in range(n_levels):
                     levels_y[roc][i].append(mean_value[roc][i] / float(n_triggers))
-                print '\rclk-delay:', "{0:2d}".format(clk), 'black lvl spread: ', "{0:2.2f}".format(spread_black[roc][clk]),
+                print('\rclk-delay:', "{0:2d}".format(clk), 'black lvl spread: ', "{0:2.2f}".format(spread_black[roc][clk]), end=' ')
                 sys.stdout.flush()
                 self.api.daqStop()
             self.api.maskAllPixels(1, roc)
             self.api.testAllPixels(0, roc)
-        print
+        print()
 
         # find the best phase
         spread = []
@@ -1466,18 +1463,18 @@ class PxarCoreCmd(cmd.Cmd):
             if spread[i] < min_spread:
                 min_spread = spread[i]
                 best_clk = i
-        print
-        print 'best clk: ', best_clk
+        print()
+        print('best clk: ', best_clk)
         names = ['clk\t\t\t', 'level spread:\t\t', 'black level spread:\t']
         infos = [clk_x, spread, spread_black[0]]
         for i in range(3):
-            print names[i],
+            print(names[i], end=' ')
             for j in range(-2, 3):
                 if not i:
-                    print infos[i][best_clk + j], '\t',
+                    print(infos[i][best_clk + j], '\t', end=' ')
                 else:
-                    print '{0:2.2f}'.format(infos[i][best_clk + j]), '\t',
-            print
+                    print('{0:2.2f}'.format(infos[i][best_clk + j]), '\t', end=' ')
+            print()
         self.set_clock(best_clk)
 
         # get an averaged header for the lvl margins
@@ -1506,9 +1503,9 @@ class PxarCoreCmd(cmd.Cmd):
             for i in clk_x:
                 f.write(str(i) + ' ')
             f.close()
-        print 'saved the levels to file(s)'
+        print('saved the levels to file(s)')
         for name in file_name:
-            print name
+            print(name)
 
         # plot address levels
         self.enable_pix(5, 12)
@@ -1531,9 +1528,9 @@ class PxarCoreCmd(cmd.Cmd):
             self.api.daqStart()
             self.api.daqTrigger(1, 500)
             event = self.converted_raw_event()
-            print clk, event
+            print(clk, event)
             self.api.daqStop()
-        print
+        print()
 
     def complete_vary_clk(self):
         # return help for the cmd
@@ -1552,7 +1549,7 @@ class PxarCoreCmd(cmd.Cmd):
             self.api.daqTrigger(1, 500)
             sleep(0.1)
             event = self.converted_raw_event()
-            print value, event
+            print(value, event)
             self.api.daqStop()
 
     def complete_scan_tb_delay(self):
@@ -1578,10 +1575,10 @@ class PxarCoreCmd(cmd.Cmd):
             rawEvent = self.api.daqGetRawEvent()
         except RuntimeError:
             pass
-        print "raw Event:\t\t", "[",
+        print("raw Event:\t\t", "[", end=' ')
         for event in rawEvent:
-            print '{0:5d}'.format(event),
-        print "]"
+            print('{0:5d}'.format(event), end=' ')
+        print("]")
         nCount = 0
         for i in rawEvent:
             i = i & 0x0fff
@@ -1589,10 +1586,10 @@ class PxarCoreCmd(cmd.Cmd):
                 i -= 4096
             rawEvent[nCount] = i
             nCount += 1
-        print "converted Event:\t", "[",
+        print("converted Event:\t", "[", end=' ')
         for event in rawEvent:
-            print '{0:5d}'.format(event),
-        print "]"
+            print('{0:5d}'.format(event), end=' ')
+        print("]")
         self.api.daqStop()
 
     def complete_daqRawEvent(self):
@@ -1609,12 +1606,12 @@ class PxarCoreCmd(cmd.Cmd):
             data = self.api.daqGetEvent()
         except RuntimeError:
             pass
-        print len(data)
+        print(len(data))
         if len(data.pixels) == 0:
-            print "[]"
+            print("[]")
         else:
             for event in data.pixels:
-                print event
+                print(event)
         self.api.daqStop()
 
     def complete_daqEvent(self, text, line, start_index, end_index):
@@ -1652,7 +1649,7 @@ class PxarCoreCmd(cmd.Cmd):
     @arity(0, 1, [int])
     def do_print_activated_pixels(self, roc=0):
         """print_activated_pixels: prints which pixels are activated"""
-        print self.print_activated(roc)
+        print(self.print_activated(roc))
 
     def print_activated_pixels(self):
         # return help for the cmd
@@ -1671,10 +1668,10 @@ class PxarCoreCmd(cmd.Cmd):
             self.api.maskAllPixels(1, roc)
             self.api.testPixel(row, column, 1, roc)
             self.api.maskPixel(row, column, 0, roc)
-        print '--> disable and mask all pixels of all activated ROCs'
+        print('--> disable and mask all pixels of all activated ROCs')
         print_string = '--> enable and unmask Pixel {r}/{c}: '.format(r=row, c=column)
-        print_string += '(' + ','.join('ROC {n}: {a}/{m}'.format(n=roc, a=self.get_activated(roc)[0], m=self.get_activated(roc)[1]) for roc in xrange(self.api.getNEnabledRocs())) + ')'
-        print print_string
+        print_string += '(' + ','.join('ROC {n}: {a}/{m}'.format(n=roc, a=self.get_activated(roc)[0], m=self.get_activated(roc)[1]) for roc in range(self.api.getNEnabledRocs())) + ')'
+        print(print_string)
 
     def complete_enableOnePixel(self, text, line, start_index, end_index):
         # return help for the cmd
@@ -1685,11 +1682,11 @@ class PxarCoreCmd(cmd.Cmd):
         """enableBlock [right=3] [up=right] [row=3] [col=3] : unmask all Pixels; starting from row and col enable block of size up * right"""
         up = right if up is None else up
         self.api.maskAllPixels(1)
-        print '--> mask and enable all pixels!'
+        print('--> mask and enable all pixels!')
         for i in range(right):
             for j in range(up):
                 self.api.maskPixel(i + col, j + row, 0)
-        print '--> unmask Block from {c}/{r} to {c1}/{r1}'.format(c=col, r=row, c1=col + right, r1=row + up)
+        print('--> unmask Block from {c}/{r} to {c1}/{r1}'.format(c=col, r=row, c1=col + right, r1=row + up))
         self.print_activated()
 
     def complete_enableBlock(self):
@@ -1709,8 +1706,8 @@ class PxarCoreCmd(cmd.Cmd):
         """enablePixel [row] [column] : enables and unmasks a Pixel """
         self.api.testPixel(row, column, 1)
         self.api.maskPixel(row, column, 0)
-        print "--> enable and unmask Pixel " + str(row) + "/" + str(column) + " (" + str(
-            self.api.getNEnabledPixels(0)) + ", " + str(self.api.getNMaskedPixels(0)) + ")"
+        print("--> enable and unmask Pixel " + str(row) + "/" + str(column) + " (" + str(
+            self.api.getNEnabledPixels(0)) + ", " + str(self.api.getNMaskedPixels(0)) + ")")
 
     def complete_enablePixel(self):
         # return help for the cmd
@@ -1725,8 +1722,8 @@ class PxarCoreCmd(cmd.Cmd):
             for col in range(start, stop + 1, step_col):
                 self.api.testPixel(col, rows, 1)
                 self.api.maskPixel(col, rows, 0)
-        print "--> enable and unmask row", row, "from col", start, "to", stop, '(' + str(
-            self.api.getNEnabledPixels(0)) + ", " + str(self.api.getNMaskedPixels(0)) + ")"
+        print("--> enable and unmask row", row, "from col", start, "to", stop, '(' + str(
+            self.api.getNEnabledPixels(0)) + ", " + str(self.api.getNMaskedPixels(0)) + ")")
 
     def complete_enableRow(self):
         # return help for the cmd
@@ -1737,8 +1734,8 @@ class PxarCoreCmd(cmd.Cmd):
         """PixelActive : shows how many Pixels are active and how many masked"""
         active = self.api.getNEnabledPixels()
         masked = self.api.getNMaskedPixels()
-        print 'Pixel{s} active: {n}'.format(s='s' if active > 1 else ' ', n=active)
-        print 'Pixel{s} masked: {n}'.format(s='s' if masked > 1 else ' ', n=masked)
+        print('Pixel{s} active: {n}'.format(s='s' if active > 1 else ' ', n=active))
+        print('Pixel{s} masked: {n}'.format(s='s' if masked > 1 else ' ', n=masked))
 
     def complete_PixelActive(self, text, line, start_index, end_index):
         # return help for the cmd
@@ -1755,8 +1752,8 @@ class PxarCoreCmd(cmd.Cmd):
         tin = data.index(min(data))
         tout = 20 - (len(data) - tin - 3 * self.api.getNRocs())
         self.api.setTestboardDelays({'tindelay': tin, 'toutdelay': tout})
-        print 'set tindelay to:  ', tin
-        print 'set toutdelay to: ', tout
+        print('set tindelay to:  ', tin)
+        print('set toutdelay to: ', tout)
 
     def complete_FindTBDelays(self):
         # return help for the cmd
@@ -1771,14 +1768,14 @@ class PxarCoreCmd(cmd.Cmd):
             self.api.setTestboardDelays({"tindelay": 14, "toutdelay": tin})
             self.api.daqStart()
             sleep(0.1)
-            print tin,
+            print(tin, end=' ')
             try:
                 data = self.get_levels()
             except:
-                print 'Cannot read data'
+                print('Cannot read data')
                 continue
 
-            print len(data), data
+            print(len(data), data)
             self.api.daqStop()
 
     def complete_findDelays(self, text, line, start_index, end_index):
@@ -1792,10 +1789,10 @@ class PxarCoreCmd(cmd.Cmd):
             self.api.setDAC("vana", vana)
             sleep(0.4)
             current = self.api.getTBia() * 1000
-            print vana, current
+            print(vana, current)
             if (current < 24.5 and current > 23.5):
                 break
-        print "\nset vana to ", vana
+        print("\nset vana to ", vana)
 
     def complete_scanVana(self, text, line, start_index, end_index):
         # return help for the cmd
@@ -1806,7 +1803,7 @@ class PxarCoreCmd(cmd.Cmd):
         """varyClk [start] [end]: plots addresslevelscans for clk delay settings between [start] and [end] and varies all other delays accordingly"""
         self.enable_pix(5, 12)
         for value in range(start, end + 1):
-            print "prints the histo for clk = " + str(value) + "..."
+            print("prints the histo for clk = " + str(value) + "...")
             self.set_clock(value)
             self.window = PxarGui(gClient.GetRoot(), 800, 800)
             plotdata = self.address_level_scan()
@@ -1825,9 +1822,9 @@ class PxarCoreCmd(cmd.Cmd):
     def do_maddressDecoder(self, verbose=False):
         """do_maddressDecoder: decodes the address of the activated pixel"""
         addresses = self.get_address_levels()
-        print addresses
+        print(addresses)
         nAddresses = len(addresses) / 5
-        print "There are", nAddresses, "pixel activated"
+        print("There are", nAddresses, "pixel activated")
         matrix = []
         for row in range(80):
             matrix.append([])
@@ -1837,7 +1834,7 @@ class PxarCoreCmd(cmd.Cmd):
             addresses = self.get_address_levels()
             for i in range(len(addresses)):  # norm the lowest level to zero
                 addresses[i] += 1
-            print str(j + 1) + ". measurement"
+            print(str(j + 1) + ". measurement")
             for i in range(nAddresses):
                 column = (addresses[i * 5]) * 2 * 6 + (addresses[i * 5 + 1]) * 2 * 1
                 if addresses[i * 5 + 4] % 2 != 0:
@@ -1859,10 +1856,10 @@ class PxarCoreCmd(cmd.Cmd):
             for i in range(81):
                 for j in range(53):
                     if matrix[80 - i][j] != 0:
-                        print '\033[91m' + '{0:02d}'.format(matrix[i][j]) + '\033[0m',
+                        print('\033[91m' + '{0:02d}'.format(matrix[i][j]) + '\033[0m', end=' ')
                     else:
-                        print '{0:02d}'.format(matrix[i][j]),
-                print ""
+                        print('{0:02d}'.format(matrix[i][j]), end=' ')
+                print("")
         else:
 
             data = []
@@ -1874,7 +1871,7 @@ class PxarCoreCmd(cmd.Cmd):
                         px = Pixel(value, 0)
                         data.append(px)
             for i in data:
-                print i
+                print(i)
             self.window = PxarGui(gClient.GetRoot(), 1000, 800)
             self.plot_map(data, "maddressDecoding")
 
@@ -1886,7 +1883,7 @@ class PxarCoreCmd(cmd.Cmd):
     def do_addressDecoding(self, start, end):
         """do_addressDecoding: prints and saves the values of the addresses from the specific pixels"""
         f = open('addresses', 'w')
-        print "column\trow\taddresslevels"
+        print("column\trow\taddresslevels")
         for row in range(start, end + 1):
             for column in range(1):
                 self.api.maskAllPixels(1)
@@ -1894,7 +1891,7 @@ class PxarCoreCmd(cmd.Cmd):
                 self.api.maskPixel(column, row, 0)
                 self.api.testPixel(column, row, 1)
                 addresses = self.get_address_levels()
-                print '{0:02d}'.format(column) + "\t" + '{0:02d}'.format(row) + "\t" + str(addresses)
+                print('{0:02d}'.format(column) + "\t" + '{0:02d}'.format(row) + "\t" + str(addresses))
                 f.write(str('{0:02d}'.format(column)) + ';' + str('{0:02d}'.format(row)) + '; ' + str(addresses) + '\n')
         f.close()
 
@@ -1924,7 +1921,7 @@ class PxarCoreCmd(cmd.Cmd):
                 sumEvent[i] += rawEvent[i]
         for i in range(len(rawEvent)):
             sumEvent[i] = int(round(float(sumEvent[i]) / x, 0))
-        print sumEvent
+        print(sumEvent)
         self.api.daqStop()
 
     def complete_pixelTest(self, text, line, start_index, end_index):
@@ -1946,10 +1943,10 @@ class PxarCoreCmd(cmd.Cmd):
             for col in range(52):
                 matrix[row].append(0)
                 # n_trigger = 10000
-        print 'Start Test with {0} Trigger'.format(n_trigger)
+        print('Start Test with {0} Trigger'.format(n_trigger))
         for i in range(n_trigger):
             if i % 100 == 0:
-                print '{0:5.2f}%\r'.format(i * 100. / n_trigger),
+                print('{0:5.2f}%\r'.format(i * 100. / n_trigger), end=' ')
                 sys.stdout.flush()
             event = self.get_levels()
             #            print event, self.convertedRaw()
@@ -1996,10 +1993,10 @@ class PxarCoreCmd(cmd.Cmd):
             for i in range(81):
                 for j in range(53):
                     if matrix[80 - i][j] != 0:
-                        print '\033[91m' + '{0:02d}'.format(matrix[i][j]) + '\033[0m',
+                        print('\033[91m' + '{0:02d}'.format(matrix[i][j]) + '\033[0m', end=' ')
                     else:
-                        print '{0:02d}'.format(matrix[i][j]),
-                print ""
+                        print('{0:02d}'.format(matrix[i][j]), end=' ')
+                print("")
         else:
 
             data = []
@@ -2036,19 +2033,19 @@ class PxarCoreCmd(cmd.Cmd):
         (default [90] [100] [130])"""
 
         # prepararations
-        print 'Turning on HV!'
+        print('Turning on HV!')
         self.api.HVon()
-        print 'Setting trigger source to "extern"'
+        print('Setting trigger source to "extern"')
         self.api.daqTriggerSource('extern')
         self.api.daqStart()
 
         trigger_phases = zeros(10)
-        yields = OrderedDict([(roc, {wbc: 0 for wbc in xrange(min_wbc, max_wbc)}) for roc in xrange(self.api.getNEnabledRocs())])
+        yields = OrderedDict([(roc, {wbc: 0 for wbc in range(min_wbc, max_wbc)}) for roc in range(self.api.getNEnabledRocs())])
         set_dacs = {roc: False for roc in yields}
-        print '\nROC EVENT YIELDS:\n  wbc\t{r}'.format(r='\t'.join(('roc' + str(yld)).rjust(6) for yld in yields.keys()))
+        print('\nROC EVENT YIELDS:\n  wbc\t{r}'.format(r='\t'.join(('roc' + str(yld)).rjust(6) for yld in list(yields.keys()))))
 
         # loop over wbc
-        for wbc in xrange(min_wbc, max_wbc):
+        for wbc in range(min_wbc, max_wbc):
             self.clear_buffer()
             self.api.setDAC('wbc', wbc)
 
@@ -2063,23 +2060,23 @@ class PxarCoreCmd(cmd.Cmd):
                     n_triggers += 1
                 except RuntimeError:
                     pass
-            y_strings = ['{y:5.1f}%'.format(y=yld) for yld in [yields[roc][wbc] for roc in yields.iterkeys()]]
-            print '  {w:03d}\t{y}'.format(w=wbc, y='\t'.join(y_strings))
+            y_strings = ['{y:5.1f}%'.format(y=yld) for yld in [yields[roc][wbc] for roc in yields.keys()]]
+            print('  {w:03d}\t{y}'.format(w=wbc, y='\t'.join(y_strings)))
 
             # stopping criterion
             best_wbc = max_wbc
             if wbc > min_wbc + 3:
-                for roc, ylds in yields.iteritems():
-                    if any(yld > 10 for yld in ylds.values()[:wbc - min_wbc - 2]):
-                        best_wbc = ylds.keys()[ylds.values().index(max(ylds.values()))]
-                        print 'set wbc of roc {i} to {v}'.format(i=roc, v=best_wbc)
+                for roc, ylds in yields.items():
+                    if any(yld > 10 for yld in list(ylds.values())[:wbc - min_wbc - 2]):
+                        best_wbc = list(ylds.keys())[list(ylds.values()).index(max(ylds.values()))]
+                        print('set wbc of roc {i} to {v}'.format(i=roc, v=best_wbc))
                         self.api.setDAC('wbc', best_wbc, roc)
                         set_dacs[roc] = True
-                if all(set_dacs.itervalues()):
-                    print 'found all wbcs'
+                if all(set_dacs.values()):
+                    print('found all wbcs')
 
-                    for roc, dic in yields.iteritems():
-                        keys = dic.keys()
+                    for roc, dic in yields.items():
+                        keys = list(dic.keys())
                         for key in keys:
                             if key >= best_wbc + 4:
                                 yields[roc].pop(key)
@@ -2088,18 +2085,18 @@ class PxarCoreCmd(cmd.Cmd):
 
         # triggerphase
 
-        print '\nTRIGGER PHASE:'
+        print('\nTRIGGER PHASE:')
         for i, trigger_phase in enumerate(trigger_phases):
             if trigger_phase:
                 percentage = trigger_phase * 100 / sum(trigger_phases)
-                print '{i}\t{d} {v:2.1f}%'.format(i=i, d=int(round(percentage)) * '|', v=percentage)
+                print('{i}\t{d} {v:2.1f}%'.format(i=i, d=int(round(percentage)) * '|', v=percentage))
 
         # plot wbc_scan
         mg = TMultiGraph('mg_wbc', 'WBC Scans for all ROCs')
-        colors = range(1, len(yields) + 1)
+        colors = list(range(1, len(yields) + 1))
         l = Plotter.create_legend(nentries=len(yields), x1=.7)
-        for i, (roc, dic) in enumerate(yields.iteritems()):
-            gr = Plotter.create_graph(x=dic.keys(), y=dic.values(), tit='wbcs for roc {r}'.format(r=roc), xtit='wbc', ytit='yield [%]', color=colors[i])
+        for i, (roc, dic) in enumerate(yields.items()):
+            gr = Plotter.create_graph(x=list(dic.keys()), y=list(dic.values()), tit='wbcs for roc {r}'.format(r=roc), xtit='wbc', ytit='yield [%]', color=colors[i])
             l.AddEntry(gr, 'roc{r}'.format(r=roc), 'lp')
             mg.Add(gr, 'lp')
         self.Plotter.plot_histo(mg, draw_opt='a', l=l)
@@ -2118,7 +2115,7 @@ class PxarCoreCmd(cmd.Cmd):
         self.api.HVon()
 
         latencyScan = []
-        print "latency \tyield"
+        print("latency \tyield")
 
         # loop over latency
         for latency in range(minlatency, maxlatency):
@@ -2146,7 +2143,7 @@ class PxarCoreCmd(cmd.Cmd):
 
             hitYield = 100 * nHits / triggers
             latencyScan.append(hitYield)
-            print '{0:03d}'.format(latency), "\t", '{0:3.0f}%'.format(hitYield)
+            print('{0:03d}'.format(latency), "\t", '{0:3.0f}%'.format(hitYield))
             self.api.daqStop()
 
         if (self.window):
@@ -2172,24 +2169,24 @@ class PxarCoreCmd(cmd.Cmd):
         for line in mask:
             if line[0] == 'roc':
                 n_rocs = int(line[1])
-                print "masking ROC:", n_rocs
+                print("masking ROC:", n_rocs)
                 self.api.maskAllPixels(1, n_rocs)
             elif line[0] == 'pix':
                 n_rocs = int(line[1])
                 col = int(line[2])
                 row = int(line[3])
-                print "masking Pixel:\t", '{0:02d}'.format(col), '{0:02d}'.format(row), "\tof ROC", n_rocs
+                print("masking Pixel:\t", '{0:02d}'.format(col), '{0:02d}'.format(row), "\tof ROC", n_rocs)
                 self.api.maskPixel(col, row, 1, n_rocs)
             elif line[0] == 'col':
                 n_rocs = int(line[1])
                 min_col = int(line[2])
                 if len(line) <= 3:
-                    print "masking col:\t", min_col, "\tof ROC", n_rocs
+                    print("masking col:\t", min_col, "\tof ROC", n_rocs)
                     for row in range(80):
                         self.api.maskPixel(min_col, row, 1, n_rocs)
                 if len(line) > 3:
                     max_col = int(line[3])
-                    print "masking col:\t", str(min_col) + '-' + str(max_col), "\tof ROC", n_rocs
+                    print("masking col:\t", str(min_col) + '-' + str(max_col), "\tof ROC", n_rocs)
                     for col in range(min_col, max_col + 1):
                         for row in range(80):
                             self.api.maskPixel(col, row, 1, n_rocs)
@@ -2197,12 +2194,12 @@ class PxarCoreCmd(cmd.Cmd):
                 n_rocs = int(line[1])
                 min_row = int(line[2])
                 if len(line) <= 3:
-                    print "masking row:\t", min_row, "\tof ROC", n_rocs
+                    print("masking row:\t", min_row, "\tof ROC", n_rocs)
                     for col in range(52):
                         self.api.maskPixel(col, min_row, 1, n_rocs)
                 if len(line) > 3:
                     max_row = int(line[3])
-                    print "masking row:\t", str(min_row) + '-' + str(max_row), "\tof ROC", n_rocs
+                    print("masking row:\t", str(min_row) + '-' + str(max_row), "\tof ROC", n_rocs)
                     for row in range(min_row, max_row + 1):
                         for col in range(52):
                             self.api.maskPixel(col, row, 1, n_rocs)
@@ -2238,16 +2235,16 @@ class PxarCoreCmd(cmd.Cmd):
             #                    for j in range(5):
             #                        levels[j] += data[j+3]
             #
-            print name, delay,  # len(data),"\t",
+            print(name, delay, end=' ')  # len(data),"\t",
             #            for i in range(2):
             #                print '{0:4.0f}'.format(sumData[i]/float(20)),
             #            print "\t",
             #            for i in range(5):
             #                print '{0:3.0f}'.format(levels[i]/float(20)),
             #            print
-            print self.api.getTBia() * 1000
+            print(self.api.getTBia() * 1000)
         # self.api.daqStop()
-        print "test took: ", round(time() - t, 2), "s"
+        print("test took: ", round(time() - t, 2), "s")
 
     def complete_check_tbsettings(self):
         # return help for the cmd
@@ -2258,35 +2255,35 @@ class PxarCoreCmd(cmd.Cmd):
         """ do_checkTBsettings [minWBC] [nTrigger]: sets the values of wbc
             from minWBC until it finds the wbc which has more than 90% filled events or it reaches 200 (default minWBC 90)"""
 
-        print "header\t",
+        print("header\t", end=' ')
         self.get_averaged_level(it)
 
-        print "-1\t",
+        print("-1\t", end=' ')
         self.api.testAllPixels(0)
         self.api.testPixel(0, 79, 1)
         self.get_averaged_level(it)
 
-        print "0\t",
+        print("0\t", end=' ')
         self.api.testAllPixels(0)
         self.api.testPixel(15, 59, 1)
         self.get_averaged_level(it)
 
-        print "1\t",
+        print("1\t", end=' ')
         self.api.testAllPixels(0)
         self.api.testPixel(28, 37, 1)
         self.get_averaged_level(it)
 
-        print "2\t",
+        print("2\t", end=' ')
         self.api.testAllPixels(0)
         self.api.testPixel(43, 16, 1)
         self.get_averaged_level(it)
 
-        print "03033\t",
+        print("03033\t", end=' ')
         self.api.testAllPixels(0)
         self.api.testPixel(20, 48, 1)
         self.get_averaged_level(it)
 
-        print "04044\t",
+        print("04044\t", end=' ')
         self.api.testAllPixels(0)
         self.api.testPixel(23, 45, 1)
         self.get_averaged_level(it)
@@ -2327,16 +2324,16 @@ class PxarCoreCmd(cmd.Cmd):
         mean = None
         t2 = time()
         while triggers < max_triggers:
-            print "\r#events:", '{0:06d}'.format(triggers),
+            print("\r#events:", '{0:06d}'.format(triggers), end=' ')
             if triggers < windowsize:
                 mean = triggers / (time() - t1)
-                print 'rate: {0:03.0f} Hz'.format(mean),
+                print('rate: {0:03.0f} Hz'.format(mean), end=' ')
                 if triggers == 90:
                     t2 = time()
             elif triggers > before and triggers % 10 == 0:
                 mean = float(windowsize - 5) / windowsize * mean + float(windowsize - 95) / windowsize * 10 / (
                         time() - t2)
-                print 'rate: {0:03.0f} Hz'.format(mean),
+                print('rate: {0:03.0f} Hz'.format(mean), end=' ')
                 t2 = time()
             sys.stdout.flush()
             before = triggers
@@ -2357,7 +2354,7 @@ class PxarCoreCmd(cmd.Cmd):
                 pass
         self.api.daqStop()
 
-        print "\ntest took: ", round(time() - t, 2), "s"
+        print("\ntest took: ", round(time() - t, 2), "s")
         plot = Plotter.create_th2(d, 0, 417 if module else 53, 0, 161 if module else 81, "hitmap", 'pixels x', 'pixels y', "hitmap")
         self.plot_graph(plot, draw_opt='hist')
 
@@ -2399,7 +2396,7 @@ class PxarCoreCmd(cmd.Cmd):
             self.api.setDAC('ctrlreg', 0)
             self.trim_ver(vcal_thresh[col + 1], ntrig)
             for row in range(40):
-                print '\r', '{0:2.2f}%'.format((col + float(row) / 80) / float(52) * 100),
+                print('\r', '{0:2.2f}%'.format((col + float(row) / 80) / float(52) * 100), end=' ')
                 sys.stdout.flush()
             self.api.daqStop()
             # second half col
@@ -2412,7 +2409,7 @@ class PxarCoreCmd(cmd.Cmd):
             self.api.setDAC('ctrlreg', 0)
             self.trim_ver(vcal_thresh[col + 1], ntrig, 40)
             for row in range(40, 80):
-                print '\r', '{0:2.2f}%'.format((col + float(row) / 80) / float(52) * 100),
+                print('\r', '{0:2.2f}%'.format((col + float(row) / 80) / float(52) * 100), end=' ')
                 sys.stdout.flush()
             self.api.daqStop()
 
@@ -2453,7 +2450,7 @@ class PxarCoreCmd(cmd.Cmd):
             self.api.setDAC('ctrlreg', 4)
             self.vcal_scan(ph_y[col], average, 40)
             for row in range(40):
-                print '\r', '{0:2.2f}%'.format((col + float(row) / 80) / float(52) * 100),
+                print('\r', '{0:2.2f}%'.format((col + float(row) / 80) / float(52) * 100), end=' ')
                 sys.stdout.flush()
                 f.write('Pix ' + str(col) + ' ' + str(row) + ' ')
                 for val in ph_y[0][row]:
@@ -2472,14 +2469,14 @@ class PxarCoreCmd(cmd.Cmd):
             self.api.setDAC('ctrlreg', 4)
             self.vcal_scan(ph_y[col], average, 40, 40)
             for row in range(40, 80):
-                print '\r', '{0:2.2f}%'.format((col + float(row) / 80) / float(52) * 100),
+                print('\r', '{0:2.2f}%'.format((col + float(row) / 80) / float(52) * 100), end=' ')
                 sys.stdout.flush()
                 f.write('Pix ' + str(col) + ' ' + str(row) + ' ')
                 for val in ph_y[0][row]:
                     f.write(str(val) + ' ')
                 f.write('\n')
             self.api.daqStop()
-        print
+        print()
         f.close()
 
         if do_plot:
@@ -2497,7 +2494,7 @@ class PxarCoreCmd(cmd.Cmd):
             plot.Draw('P')
             plot2.Draw('P')
             c1.Update()
-            raw_input()
+            input()
             # f1 = ROOT.TH1.pol1
             # plot.Fit(fit, 'Q')
             # self.window.histos.append(plot)
@@ -2519,8 +2516,8 @@ class PxarCoreCmd(cmd.Cmd):
                 sum1 += 1
             if len(data) > 9:
                 sum2 += 1
-        print 100 * float(sum1) / trigger, '%'
-        print 100 * float(sum2) / trigger, '%'
+        print(100 * float(sum1) / trigger, '%')
+        print(100 * float(sum2) / trigger, '%')
 
     def complete_raw_rate(self):
         # return help for the cmd
@@ -2549,10 +2546,10 @@ class PxarCoreCmd(cmd.Cmd):
                     empty += 1
                 trig += 1
                 if doprint:
-                    print "UB", data[0], "\tlength", len(data)
+                    print("UB", data[0], "\tlength", len(data))
             except RuntimeError:
                 pass
-        print 'empty events: {0:03.0f}%'.format(100 * float(empty) / trigger), str(empty) + "/" + str(trigger)
+        print('empty events: {0:03.0f}%'.format(100 * float(empty) / trigger), str(empty) + "/" + str(trigger))
 
     def complete_check_events(self):
         # return help for the cmd
@@ -2567,11 +2564,11 @@ class PxarCoreCmd(cmd.Cmd):
             if len(data) > 1:
                 if data[-1] > 1:
                     stack += 1
-                    print data[-1]
+                    print(data[-1])
                 trig += 1
-                print '\r{0:05d}'.format(trig),
+                print('\r{0:05d}'.format(trig), end=' ')
                 sys.stdout.flush()
-        print 'stacks larger than 2: {0:3.1f}%'.format(100 * float(stack) / trigger), str(stack) + "/" + str(trigger)
+        print('stacks larger than 2: {0:3.1f}%'.format(100 * float(stack) / trigger), str(stack) + "/" + str(trigger))
 
     def complete_check_stack(self):
         # return help for the cmd
@@ -2603,8 +2600,8 @@ class PxarCoreCmd(cmd.Cmd):
                 if data[10] > -80:
                     protons += data[10]
                     trigger += 1
-        print protons / max_trigger
-        print pions / max_trigger
+        print(protons / max_trigger)
+        print(pions / max_trigger)
 
     def complete_measure_ph(self):
         # return help for the cmd
@@ -2618,7 +2615,7 @@ class PxarCoreCmd(cmd.Cmd):
         spread = []
         roc = 0
         self.api.daqStart()
-        for dac, i in zip(range(20, 255, step), range(255)):
+        for dac, i in zip(list(range(20, 255, step)), list(range(255))):
             self.api.setDAC('phscale', dac)
             self.api.daqTrigger(triggers, 500)
             spread.append([0])
@@ -2635,7 +2632,7 @@ class PxarCoreCmd(cmd.Cmd):
                 spread[i][0] += spread_j / 5
             spread[i][0] /= float(triggers)
             spread[i].append(dac)
-            print dac, "{0:2.1f}".format(spread[i][0]), event
+            print(dac, "{0:2.1f}".format(spread[i][0]), event)
         self.api.daqStop()
         # find best phscale
         min_phscale = 100
@@ -2644,7 +2641,7 @@ class PxarCoreCmd(cmd.Cmd):
             if i[0] < min_phscale:
                 min_phscale = i[0]
                 best_phscale = i[1]
-        print 'set phscale to:', best_phscale
+        print('set phscale to:', best_phscale)
         self.api.setDAC('phscale', best_phscale)
 
     def complete_find_phscale(self):
@@ -2693,7 +2690,7 @@ class PxarCoreCmd(cmd.Cmd):
         self.enable_single_pixel(col, row)
         self.api.daqStart()
         for i, lst in enumerate(self.get_mean_levels(averaging)):
-            print 'ROC {}: {}'.format(i, ' '.join(['{0:3.1f}'.format(i) for i in lst]))
+            print('ROC {}: {}'.format(i, ' '.join(['{0:3.1f}'.format(i) for i in lst])))
         self.api.daqStop()
 
     def complete_averaged_levels(self):
@@ -2715,11 +2712,11 @@ class PxarCoreCmd(cmd.Cmd):
         # self.api.maskAllPixels(1)
         self.api.daqStart()
         phscale0 = 90
-        for roc in xrange(1, self.api.getNRocs()):
-            for phscale in xrange(phscale0, 256):
+        for roc in range(1, self.api.getNRocs()):
+            for phscale in range(phscale0, 256):
                 self.api.setDAC('phscale', phscale, roc)
                 b, ub = self.get_mean_black_levels(avg)
-                print roc, phscale, b[roc]
+                print(roc, phscale, b[roc])
                 if ub[roc] < ub[0]:
                     break
         self.api.daqStop()
@@ -2733,9 +2730,9 @@ class PxarCoreCmd(cmd.Cmd):
         # self.api.maskAllPixels(1)
         self.api.daqStart()
         b, ub = self.get_mean_black_levels(avg)
-        print 'ROC  {}'.format('     '.join(str(w) for w in range(len(b))))
-        print 'UB  {}'.format(' '.join(['{0:3.1f}'.format(i) for i in b]))
-        print 'B   {}'.format(' '.join(['{0:3.1f}'.format(i) for i in ub]))
+        print('ROC  {}'.format('     '.join(str(w) for w in range(len(b)))))
+        print('UB  {}'.format(' '.join(['{0:3.1f}'.format(i) for i in b])))
+        print('B   {}'.format(' '.join(['{0:3.1f}'.format(i) for i in ub])))
         self.api.daqStop()
 
     def complete_mean_black_levels(self):
@@ -2744,16 +2741,16 @@ class PxarCoreCmd(cmd.Cmd):
 
     @arity(5, 5, [int, int, int, int, int])
     def do_get_addresses(self, a, b, c, d, e):
-        print self.get_addresses([a, b, c, d ,e])
+        print(self.get_addresses([a, b, c, d ,e]))
 
     @arity(0, 4, [int, int, int, int])
     def do_decode(self, col=5, row=12, roc=0, offset=0):
         self.enable_single_pixel(col, row)
         event = self.daq_converted_raw()
-        print event, event[roc * 9:(roc + 1) * 9]
+        print(event, event[roc * 9:(roc + 1) * 9])
         levels = self.translate_levels(event[roc * 9:(roc + 1) * 9], offset=offset)
-        print levels
-        print self.get_addresses(levels)
+        print(levels)
+        print(self.get_addresses(levels))
 
     @arity(0, 0, [])
     def do_splittings(self):
@@ -2788,13 +2785,13 @@ class PxarCoreCmd(cmd.Cmd):
                     black_dev[roc][adr] += val
                     black_dev2[roc][adr] += val * val
         for roc in range(rocs):
-            print roc, ":",
+            print(roc, ":", end=' ')
             for i in range(len(black_dev[roc])):
                 mean = black_dev[roc][i] / avg
                 # mean2 = black_dev2[roc][i]/ avg - mean * mean
                 # mean2 = math.sqrt(mean2)
-                print mean
-            print
+                print(mean)
+            print()
         # for r in black_real[roc]:
         #     print r,
         # print
@@ -2825,13 +2822,13 @@ class PxarCoreCmd(cmd.Cmd):
                 f.write(str(data) + '\n')
                 if len(data.pixels) > 0:
                     hits += 1
-                print '\rprocess:', '{0:6d}'.format(conf_triggers) + '/' + str(events),
+                print('\rprocess:', '{0:6d}'.format(conf_triggers) + '/' + str(events), end=' ')
                 sys.stdout.flush()
                 conf_triggers += 1
             except RuntimeError:
                 pass
         self.api.daqStop()
-        print '\rhit yield:', "{0:5.2f}%".format(hits / float(events) * 100), '({hits}/{events})'.format(hits=hits, events=events)
+        print('\rhit yield:', "{0:5.2f}%".format(hits / float(events) * 100), '({hits}/{events})'.format(hits=hits, events=events))
         f.close()
 
     def complete_marie_can_save(self):
@@ -2845,7 +2842,7 @@ class PxarCoreCmd(cmd.Cmd):
         self.enable_pix(14, 14)
         self.api.daqStart()
         for ctrl_reg in [0, 4]:
-            print 'ctrlreg:', ctrl_reg
+            print('ctrlreg:', ctrl_reg)
             self.api.setDAC('ctrlreg', ctrl_reg)
             sleep(.5)
             trig = 0
@@ -2855,13 +2852,13 @@ class PxarCoreCmd(cmd.Cmd):
                     self.api.daqTrigger(1, 500)
                     data = self.api.daqGetEvent()
                     if len(data.pixels):
-                        print '{0:4d}'.format(int(data.pixels[0].value))
+                        print('{0:4d}'.format(int(data.pixels[0].value)))
                         trig += 1
                     else:
                         n_err += 1
                 except Exception as err:
                     n_err += 1
-                    print err
+                    print(err)
         self.api.daqStop()
 
     def complete_checkADCTimeConstant(self):
@@ -2895,12 +2892,12 @@ class PxarCoreCmd(cmd.Cmd):
     def do_efficiency_scan(self, start, stop, dac_str='vana', ntrig=100, col=14, row=14, vcal=200):
         """ checkADCTimeConstant [vcal=200] [ntrig=10]: sends an amount of triggers for a fixed vcal in high/low region and prints adc values"""
         efficiencies = []
-        for dac in xrange(start, stop):
-            print '\rmeasuring {1}: {0:3d}'.format(dac, dac_str),
+        for dac in range(start, stop):
+            print('\rmeasuring {1}: {0:3d}'.format(dac, dac_str), end=' ')
             self.api.setDAC(dac_str, dac)
             efficiencies.append(self.eff_check(ntrig, col, row, vcal if dac_str != 'vcal' else dac))
-        print
-        gr = Plotter.create_graph(range(start, stop), efficiencies, 'Efficiency Vs {0}'.format(dac_str.title()), '{d} [dac]'.format(d=dac_str), 'Efficiency [%]')
+        print()
+        gr = Plotter.create_graph(list(range(start, stop)), efficiencies, 'Efficiency Vs {0}'.format(dac_str.title()), '{d} [dac]'.format(d=dac_str), 'Efficiency [%]')
         self.plot_graph(gr)
         self.api.daqStop()
 
@@ -2913,27 +2910,27 @@ class PxarCoreCmd(cmd.Cmd):
         """ checkADCTimeConstant [vcal=200] [ntrig=10]: sends an amount of triggers for a fixed vcal in high/low region and prints adc values"""
         self.enable_pix(row, col)
         self.api.daqStart()
-        vanas = range(55, 110)
+        vanas = list(range(55, 110))
         thresholds = []
         for vana in vanas:
             self.api.setDAC('vana', vana)
-            for vcal in xrange(0, 256):
-                print '\rscanning vcal for vana: {1} {0:3d}'.format(vcal, vana),
+            for vcal in range(0, 256):
+                print('\rscanning vcal for vana: {1} {0:3d}'.format(vcal, vana), end=' ')
                 self.api.setDAC('vcal', vcal)
                 self.api.daqTrigger(ntrig, 500)
                 good_events = 0
-                for i in xrange(ntrig):
+                for i in range(ntrig):
                     good_events += bool(self.api.daqGetEvent().pixels)
                 eff = good_events / float(ntrig)
                 # eff = sum(1 for ev in self.api.daqGetEventBuffer() if ev.pixels) / float(ntrig)
-                print '{0:4.2f}%'.format(eff),
+                print('{0:4.2f}%'.format(eff), end=' ')
                 stdout.flush()
                 if eff > .99:
                     thresholds.append(vcal)
                     break
                 if vcal == 255 and eff < .99:
                     thresholds.append(0)
-        print
+        print()
         gr = Plotter.create_graph(vanas, thresholds, 'Vana vs. Threshold (trimmed to 40 vcal)', 'vana [dac]', 'measured threshold [vcal]')
         self.plot_graph(gr)
         self.api.daqStop()
@@ -2967,12 +2964,12 @@ class PxarCoreCmd(cmd.Cmd):
     def do_anaCurrent(self):
         """ checkADCTimeConstant [vcal=200] [ntrig=10]: sends an amount of triggers for a fixed vcal in high/low region and prints adc values"""
         old_vana = self.get_dac('vana')
-        vanas = range(255)
+        vanas = list(range(255))
         ianas = []
         for vana in vanas:
             self.api.setDAC('vana', vana)
             sleep(.01)
-            iana = mean([self.api.getTBia() for _ in xrange(10)]) * 1000
+            iana = mean([self.api.getTBia() for _ in range(10)]) * 1000
             ianas.append(iana)
         gr = Plotter.create_graph(vanas, ianas, 'Analogue Current', 'vana [dac]', 'iana [mA]')
         self.plot_graph(gr)
@@ -3000,9 +2997,9 @@ class PxarCoreCmd(cmd.Cmd):
                 pixels[string] += 1
                 i += 1
             i += 1
-        print 'Good Headers: {p:4.1f}% ({g}/{h})'.format(p=good_headers / float(headers) * 100, g=good_headers, h=headers)
-        for key, word in pixels.iteritems():
-            print 'Pixel', key, word
+        print('Good Headers: {p:4.1f}% ({g}/{h})'.format(p=good_headers / float(headers) * 100, g=good_headers, h=headers))
+        for key, word in pixels.items():
+            print('Pixel', key, word)
 
     def complete_decode_linear(self):
         return [self.do_decode_linear.__doc__, '']
@@ -3010,7 +3007,7 @@ class PxarCoreCmd(cmd.Cmd):
     @arity(0, 2, [int, int])
     def do_countHits(self, duration=30, wbc=110):
         counts = self.count_hits(duration, wbc)
-        print '\n\nTotal Count after {t} seconds: {c}'.format(t=duration, c=counts)
+        print('\n\nTotal Count after {t} seconds: {c}'.format(t=duration, c=counts))
 
     def complete_countHits(self):
         return [self.do_countHits.__doc__, '']
@@ -3035,8 +3032,8 @@ class PxarCoreCmd(cmd.Cmd):
         data_low = self.scan_vcal(0, ntrig)
         data_high = self.scan_vcal(4, ntrig)
         fac = self.find_factor(data_low, data_high)
-        gr1 = Plotter.create_graph(data_low.keys(), data_low.values(), 'gr1', xtit='vcal', ytit='adc')
-        gr2 = Plotter.create_graph([key * fac for key in data_high.iterkeys()], data_high.values(), 'gr2', xtit='vcal', ytit='adc')
+        gr1 = Plotter.create_graph(list(data_low.keys()), list(data_low.values()), 'gr1', xtit='vcal', ytit='adc')
+        gr2 = Plotter.create_graph([key * fac for key in data_high.keys()], list(data_high.values()), 'gr2', xtit='vcal', ytit='adc')
         gr1.SetLineColor(3)
         gr1.SetMarkerColor(3)
         mg = TMultiGraph('mg_sv', 'ADC Calibration')
@@ -3058,7 +3055,7 @@ class PxarCoreCmd(cmd.Cmd):
     @arity(2, 4, [int, int, int, int])
     def do_threshVsCounts(self, start, stop, duration=10, wbc=110):
         gr = TGraph()
-        for i, vthr in enumerate(xrange(start, stop)):
+        for i, vthr in enumerate(range(start, stop)):
             self.api.setDAC('vthrcomp', vthr)
             counts = self.count_hits(duration, wbc)
             gr.SetPoint(i, vthr, counts)
@@ -3073,7 +3070,7 @@ class PxarCoreCmd(cmd.Cmd):
     @arity(0, 2, [int, int])
     def do_effVsMaskedPix(self, n=5, n_trig=100):
         gr = TGraph()
-        for i in xrange(n):
+        for i in range(n):
             self.mask_frame(i)
             data = self.api.getEfficiencyMap(896, n_trig)
             eff = self.print_eff(data, n_trig)
@@ -3109,8 +3106,8 @@ class PxarCoreCmd(cmd.Cmd):
         event_rate = stats.valid_events / (2.5e-8 * stats.total_events / 8.)
         hit_rate = stats.valid_pixels / (2.5e-8 * stats.total_events / 8.)
         stats.dump
-        print 'Event Rate: {0:5.4f} MHz'.format(event_rate / 1000000)
-        print 'Hit Rate:   {0:5.4f} MHz'.format(hit_rate / 1000000)
+        print('Event Rate: {0:5.4f} MHz'.format(event_rate / 1000000))
+        print('Hit Rate:   {0:5.4f} MHz'.format(hit_rate / 1000000))
 
     def complete_findErrors2(self):
         return [self.do_findErrors2.__doc__, '']
@@ -3128,9 +3125,9 @@ class PxarCoreCmd(cmd.Cmd):
             errors[1] += stats.errors_tbm
             errors[2] += stats.errors_roc
             errors[3] += stats.errors_pixel
-        print 'Number of triggers: ', n_triggers
-        print 'Number of triggers per pixel: ', n_triggers / 4160
-        print 'Errors: ', errors
+        print('Number of triggers: ', n_triggers)
+        print('Number of triggers per pixel: ', n_triggers / 4160)
+        print('Errors: ', errors)
 
     def complete_findErrors(self):
         return [self.do_findErrors.__doc__, '']
@@ -3141,10 +3138,10 @@ class PxarCoreCmd(cmd.Cmd):
         t_start = time()
         self.api.testAllPixels(0)
         gRandom.SetSeed(int(time()))
-        for roc in xrange(self.api.getNRocs()):
-            for _ in xrange(1):
+        for roc in range(self.api.getNRocs()):
+            for _ in range(1):
                 col, row = [int(gRandom.Rndm() * i) for i in [52, 80]]
-                print col, row
+                print(col, row)
                 self.api.testPixel(col, row, 1, roc)
         self.api.daqStart()
         self.start_pbar(t * 600)
@@ -3158,7 +3155,7 @@ class PxarCoreCmd(cmd.Cmd):
         self.api.daqStop()
         self.api.HVoff()
         stats = self.api.getStatistics()
-        print 'Triggers: {n}'.format(n=n_trig)
+        print('Triggers: {n}'.format(n=n_trig))
         stats.dump
 
     def complete_findErrors1(self):
@@ -3183,8 +3180,8 @@ class PxarCoreCmd(cmd.Cmd):
                 events += 1
                 values.append(event[1])
                 h.Fill(event[1])
-        print
-        print values
+        print()
+        print(values)
         self.api.daqStop()
         h.GetYaxis().SetRangeUser(0, h.GetMaximum() * 1.1)
         self.plot_graph(h, draw_opt='hist')
@@ -3244,8 +3241,8 @@ class PxarCoreCmd(cmd.Cmd):
         event_rate = stats.valid_events / (2.5e-8 * stats.total_events / 8.)
         hit_rate = stats.valid_pixels / (2.5e-8 * stats.total_events / 8.)
         stats.dump
-        print 'Event Rate: {0:5.4f} MHz'.format(event_rate / 1000000)
-        print 'Hit Rate:   {0:5.4f} MHz'.format(hit_rate / 1000000)
+        print('Event Rate: {0:5.4f} MHz'.format(event_rate / 1000000))
+        print('Hit Rate:   {0:5.4f} MHz'.format(hit_rate / 1000000))
 
     def complete_hitmap1(self):
         return [self.do_hitmap1.__doc__, '']
@@ -3296,11 +3293,11 @@ def main(sysargs=None):
     parser.add_argument('--trim', '-T', nargs='?', default=None, help="The output verbosity set in the pxar API.")
     args = parser.parse_args(sysargs)
 
-    print '\n================================================='
-    print '# Extended pXarCore Command Line Interface'
-    print '=================================================\n'
+    print('\n=================================================')
+    print('# Extended pXarCore Command Line Interface')
+    print('=================================================\n')
 
-    api = PxarStartup(args.dir, args.verbosity, args.trim)
+    api = start_pxar(args.dir, args.verbosity, args.trim)
 
     # start command line
     prompt = PxarCoreCmd(api, args.gui, args.dir)

@@ -1,0 +1,8 @@
+###### Requirements without Version Specifiers ######
+uncertainties
+numpy
+progressbar
+screeninfo
+ipython
+cython
+h5py

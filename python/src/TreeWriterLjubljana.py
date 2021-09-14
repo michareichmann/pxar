@@ -5,7 +5,7 @@
 # --------------------------------------------------------
 
 from collections import OrderedDict
-from TreeWriter import *
+from src.TreeWriter import *
 from time import time
 from numpy import array, zeros
 from glob import glob
@@ -34,12 +34,12 @@ class TreeWriterLjubljana(TreeWriter):
         return OrderedDict([('TimeStamp', array([0], 'f8'))])
 
     def init_scalar_branches(self):
-        return [OrderedDict([('NHits', array([0], 'i'))]) for _ in xrange(self.NPlanes)]
+        return [OrderedDict([('NHits', array([0], 'i'))]) for _ in range(self.NPlanes)]
 
     def init_vector_branches(self):
         n = 5000
         branches = []
-        for i in xrange(self.NPlanes):
+        for i in range(self.NPlanes):
             branches.append(OrderedDict([('Value', zeros(n, 'f8')),
                                          ('Timing', zeros(n, 'f8')),
                                          ('PixX', zeros(n, 'i4')),
@@ -49,18 +49,18 @@ class TreeWriterLjubljana(TreeWriter):
         return branches
 
     def set_event_branches(self):
-        for key, value in self.EventBranches.iteritems():
+        for key, value in self.EventBranches.items():
             self.EventTree.Branch(key, value, '{}/{}'.format(key, type_dict[value[0].dtype.name]))
 
     def init_trees(self):
-        for i in xrange(self.NPlanes):
+        for i in range(self.NPlanes):
             self.File.cd()
             self.HitDirs.append(self.File.mkdir('Plane{}'.format(i + self.Config.getint('TREE', 'plane number'))))
             self.HitDirs[i].cd()
             self.Trees.append(self.init_tree())
 
     def set_branches(self):
-        for itree in xrange(self.NPlanes):
+        for itree in range(self.NPlanes):
             for key, value in self.ScalarBranches[itree].iteritems():
                 self.Trees[itree].Branch(key, value, '{}/{}'.format(key, type_dict[value[0].dtype.name]))
             for key, vec in self.VectorBranches[itree].iteritems():
@@ -76,18 +76,18 @@ class TreeWriterLjubljana(TreeWriter):
     def write(self, ev):
         self.EventBranches['TimeStamp'][0] = time() * 1000
         n_hits = zeros(self.NPlanes, 'i')
-        x, y, adc = [[[] for _ in xrange(self.NPlanes)] for _ in xrange(3)]
+        x, y, adc = [[[] for _ in range(self.NPlanes)] for _ in range(3)]
         for pix in ev.pixels:
             n_hits[pix.roc] += 1
             x[pix.roc].append(pix.column)
             y[pix.roc].append(pix.row)
             adc[pix.roc].append(pix.value)
-        for i in xrange(self.NPlanes):
+        for i in range(self.NPlanes):
             self.ScalarBranches[i]['NHits'][0] = n_hits[i]
-            for j in xrange(len(ev.header)):
+            for j in range(len(ev.header)):
                 self.VectorBranches[i]['Timing'][j] = ev.triggerPhases[j]
                 self.VectorBranches[i]['TriggerCount'][j] = ev.triggerCounts[j]
-            for j in xrange(n_hits[i]):
+            for j in range(n_hits[i]):
                 self.VectorBranches[i]['PixX'][j] = x[i][j]
                 self.VectorBranches[i]['PixY'][j] = y[i][j]
                 self.VectorBranches[i]['Value'][j] = adc[i][j]
