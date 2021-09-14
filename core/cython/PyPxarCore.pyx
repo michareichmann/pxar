@@ -331,8 +331,8 @@ cdef class PyPxarCore:
             sd.push_back(pair[string,uint8_t](key,int(value)))
         for key, value in power_settings.items():
             ps.push_back((key,float(value)))
-        for item in enumerate(pg_setup):
-            pgs.push_back(pair[string, uint8_t ](item[1][0],int(item[1][1])))
+        for key, value in pg_setup:
+            pgs.push_back(pair[string, uint8_t](key, int(value)))
         return self.thisptr.initTestboard(sd, ps, pgs)
     def setTestboardPower(self, power_settings):
         """ Initializer method for the testboard
