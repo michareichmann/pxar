@@ -174,22 +174,22 @@ class CLIX(PxarStartUp):
         if roc_id is None:
             return [self.get_dac(dac, roc) for roc in range(self.NROCs)]
         dacs = self.API.getRocDACs(roc_id)
-        return dacs[dac] if dac in dacs else warning(f'Unknown DAC name: {dac}!')
+        return dacs[dac.encode()] if dac.encode() in dacs else warning(f'Unknown DAC name: {dac}!')
 
     def set_dac(self, name, value, roc_id=None):
         """sets the value of the DAC [dac] with ROC ID [roc_id] to [value]. """
         [self.ROCDACs[i].set(name, value) for i in range(self.NROCs)] if roc_id is None else self.ROCDACs[roc_id].set(name, value)
-        self.API.setDAC(name, value, roc_id)
+        self.API.setDAC(name.encode(), value, roc_id)
 
     def get_tb_delay(self, name):
         """:returns: the current value of the testboard delay [name]. """
         delays = self.API.getTestboardDelays()
-        return delays[name] if name in delays else warning('{} not a valid delay'.format(name))
+        return delays[name.encode()] if name.encode() in delays else warning(f'{name} not a valid delay')
 
     def set_tb_delay(self, delay, value, prnt=False):
         """sets the value of the DAC [dac] to [value]. :returns: old value"""
         old = self.TBParameters.set(delay, value, prnt, name='testboard parameters')
-        self.API.setTestboardDelays(self.TBParameters)
+        self.API.setTestboardDelays(self.TBParameters.b)
         return delay, old
 
     def set_tb_delays(self, dic, prnt=False):
@@ -203,7 +203,7 @@ class CLIX(PxarStartUp):
         """:returns: the analogue current consumption of the testboard."""
         self.API.getTBia()  # first reading is always wrong
         current = mean([self.read_ia() for _ in range(n)]) * 1000  # to mA
-        info('analogue current: {:.2f} mA'.format(current), prnt=prnt)
+        info(f'analogue current: {current:.2f} mA', prnt=prnt)
         return current if not prnt else None
 
     def get_n_rocs(self):
@@ -344,15 +344,15 @@ class CLIX(PxarStartUp):
         if probe not in probes or sig not in signals:
             print('wrong probe or signal')
             return
-        return self.API.SignalProbe(probe, sig)
+        return self.API.SignalProbe(probe.encode(), sig.encode())
 
     @update_pbar
     def set_clock(self, value, prnt=True):
         """sets all the delays to the right value if you want to change clk"""
         self.set_tb_delay('clk', value, prnt=prnt)
         self.set_tb_delay('ctr', value)
-        self.set_tb_delay('sda', value + (15 if 'dig' in self.API.getRocType() else 11))
-        self.set_tb_delay('tin', value + (5 if 'dig' in self.API.getRocType() else 2))
+        self.set_tb_delay('sda', value + (11 if self.IsAnalogue else 15))
+        self.set_tb_delay('tin', value + (2 if self.IsAnalogue else 5))
 
     def set_external_clock(self, status=True):
         """setExternalClock [status]: enables the external DTB clock input, switches off the internal clock. Only switches if external clock is present."""
@@ -360,18 +360,18 @@ class CLIX(PxarStartUp):
 
     def set_pg(self, cal=True, res=True, trg=True, delay=None):
         """ Sets up the trigger pattern generator for ROC testing """
-        pgcal = self.get_dac('wbc') + (6 if 'dig' in self.API.getRocType() else 5)
+        pgcal = self.get_dac('wbc') + (6 if 'dig' in self.ROCType else 5)
         pg_setup = []
         if delay is not None:
-            pg_setup.append(('DELAY', delay))
+            pg_setup.append((b'DELAY', delay))
         if res:
-            pg_setup.append(('PG_RESR', 25))
+            pg_setup.append((b'PG_RESR', 25))
         if cal:
-            pg_setup.append(('PG_CAL', pgcal))
+            pg_setup.append((b'PG_CAL', pgcal))
         if trg:
-            pg_setup.append(('PG_TRG', 0 if self.API.getNTbms() != 0 else 15))
+            pg_setup.append((b'PG_TRG', 0 if self.API.getNTbms() != 0 else 15))
         if self.API.getNTbms() == 0:
-            pg_setup.append(('PG_TOK', 0))
+            pg_setup.append((b'PG_TOK', 0))
         # print pg_setup
         try:
             self.API.setPatternGenerator(tuple(pg_setup))
@@ -380,15 +380,15 @@ class CLIX(PxarStartUp):
 
     def trigger_source(self, source, freq=0):
         """daqTriggerSource: select the trigger source to be used for the DAQ session"""
-        if self.API.daqTriggerSource(source, 40000000 / freq if freq else 0):
-            print('Trigger source {} selected.'.format(source))
+        if self.API.daqTriggerSource(source.encode(), 40000000 / freq if freq else 0):
+            info(f'Trigger source {source} selected.')
         else:
-            print('DAQ returns faulty state.')
+            warning('DAQ returns faulty state.')
 
     def trigger_loop(self, on='True', freq=100):
         """start/stop trigger loop: [on] [frequency]"""
         on = False if str(on).lower() in ['0', 'false', 'stop', 'end'] else True
-        self.API.daqTriggerSource('periodic' if on else 'pg_dir', 40000000 / float(freq) if on else 0)
+        self.trigger_source('periodic' if on else 'pg_dir', 40000000 / float(freq) if on else 0)
         self.daq_start()
         self.daq_trigger()
         self.daq_stop()

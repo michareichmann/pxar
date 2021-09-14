@@ -24,14 +24,14 @@ class Config(dict):
         self.FileName = filename
         self.Lines = self.read()
 
-    def read(self, start_at=0):
+    def read(self, start_at=0, dtype=str):
         if not isfile(self.FileName):
             critical(f'{self.FileName} does not exist!')
         with open(self.FileName) as f:
             lines = f.readlines()
             for words in [line.strip(' \n').split() for line in lines if not line.startswith('--') and not line.startswith('#')]:
                 if len(words) > 1:
-                    self[words[start_at].lower()] = ' '.join(words[start_at + 1:])
+                    self[words[start_at].lower()] = dtype(' '.join(words[start_at + 1:]))
             return lines
 
     def show(self, prnt_file=False, prnt=True):
@@ -47,6 +47,9 @@ class Config(dict):
 
     def get_int(self, option, default=None):
         return int(self.get(option, default))
+
+    def get_b(self, option, default=None):
+        return self.get(option, default).encode()
 
     def add_line(self, key, value):
         self.Lines.append(f'{key} {value}\n')
@@ -66,6 +69,10 @@ class Config(dict):
                 info(f'{basename(self.FileName)}: adding "{key}" key with value {value}')
                 self.add_line(key, value)
             self[key.lower()] = value
+
+    @property
+    def b(self):
+        return {key.encode(): value for key, value in self.items()}
 
 
 class PxarConfig(Config):
@@ -88,25 +95,22 @@ class PxarParameters(Config):
     """ class that loads the old-style parameters files of psi46expert """
     AllDACs = PyRegisterDictionary().getAllROCNames()
 
-    def read(self, start_at=1):
-        super().read(start_at)
-
-    def get(self, opt, default=0):
-        return int(super(PxarParameters, self).get(opt, default))
+    def read(self, start_at=1, dtype=int):
+        super().read(start_at, dtype)
 
     def set(self, dac, value, prnt=True, name='ROC'):
         """sets the value of the DAC [dac] to [value]. :returns: old value"""
         if dac.encode() not in self.AllDACs:
             return warning(f'The {name} DAC "{dac}" does not exist!')
-        info((f'setting "{dac}" to {value}' if value != self[dac.lower()] else f'{dac} already has a value of {value}'), prnt=prnt)
+        info((f'setting "{dac}" to {value}' if int(value) != self[dac.lower()] else f'{dac} already has a value of {value}'), prnt=prnt)
         old = self[dac]
-        self[dac] = value
+        self[dac] = int(value)
         return old
 
     def save(self):
         old_data = genfromtxt(self.FileName, dtype=['i', 'U30', 'i'])
         for i, (_, key, value) in enumerate(old_data):
-            if key in self and self[key] != str(value):
+            if key in self and self[key] != value:
                 info(f'{basename(self.FileName)}: overwriting "{key}" from {value} -> {self[key]}')
                 old_data[i][-1] = self[key]
         s = [max(len(str(i)) for i in old_data[a]) for a in ['f0', 'f1', 'f2']]
@@ -120,7 +124,7 @@ class TBParameters(PxarParameters):
     AllDACs = PyRegisterDictionary().getAllDTBNames()
 
     def set(self, dac, value, prnt=True, **kwargs):
-        super(TBParameters, self).set(dac, value, prnt, 'testboard parameter')
+        return super(TBParameters, self).set(dac, value, prnt, 'testboard parameter')
 
 
 def create_pixel(col, row, trim=15, roc=0, mask=True):
@@ -268,7 +272,7 @@ class PxarStartUp:
 
     def init_power(self):
         """ Initialise the power settings of the testboard. """
-        power_settings = {key: float(self.Config.get(key, default)) for key, default in [('va', 1.9), ('vd', 2.6), ('ia', 1.190), ('id', 1.10)]}
+        power_settings = {key: float(self.Config.get(key, default)) for key, default in [(b'va', 1.9), (b'vd', 2.6), (b'ia', 1.190), (b'id', 1.10)]}
         if any(value > 100 for value in power_settings.values()):
             info('set power settings from [mV] to [V]')
             power_settings = {key: int(value) / 1000. for key, value in power_settings.items()}
@@ -295,17 +299,17 @@ class PxarStartUp:
         pgcal = self.ROCDACs[0].get('wbc') + (6 if 'dig' in self.ROCType else 5)
         info(f'PGCAL: {pgcal}')
         if len(self.TBMDacs) == 0:  # Pattern Generator for single ROC operation:
-            return ('PG_RESR', 25), ('PG_CAL', pgcal),  ('PG_TRG', 16), ('PG_TOK', 0)
-        return ('PG_RESR', 15), ('PG_CAL', pgcal), ('PG_TRG', 0)
+            return (b'PG_RESR', 25), (b'PG_CAL', pgcal),  (b'PG_TRG', 16), (b'PG_TOK', 0)
+        return (b'PG_RESR', 15), (b'PG_CAL', pgcal), (b'PG_TRG', 0)
 
     def init_api(self):
         try:
             api = PyPxarCore(usbId=self.TestBoardName.encode(), logLevel=self.Verbosity.encode())
             info(f'Init API version: {api.getVersion()}')
-            if not api.initTestboard(pg_setup=self.PGSetup, power_settings=self.PowerSettings, sig_delays=self.TBParameters):
+            if not api.initTestboard(self.TBParameters.b, self.PowerSettings, self.PGSetup):
                 info('Please check if a new FW version is available')
                 critical('could not init DTB -- possible firmware mismatch.')
-            api.initDUT(self.HubIDs, self.Config.get('tbmType', 'tbm08'), self.TBMDacs, self.ROCType, self.ROCDACs, self.TrimDACs, self.I2Cs)
+            api.initDUT(self.HubIDs, self.Config.get_b('tbmType', 'tbm08'), byte_dic(self.TBMDacs), self.ROCType.encode(), byte_dic(self.ROCDACs), self.TrimDACs, self.I2Cs)
             api.testAllPixels(True)
             return api
         except RuntimeError as e:
@@ -324,10 +328,14 @@ class PxarStartUp:
             self.API.setDecodingAlphas(ub)
 
     def set_probes(self):
-        self.API.SignalProbe('a1', self.Config.get('probeA1', 'sdata1'))
-        self.API.SignalProbe('a2', self.Config.get('probeA2', 'sdata2'))
-        self.API.SignalProbe('d1', self.Config.get('probeD1', 'clk'))
-        self.API.SignalProbe('d2', self.Config.get('probeD2', 'ctr'))
+        self.API.SignalProbe(b'a1', self.Config.get_b('probeA1', 'sdata1'))
+        self.API.SignalProbe(b'a2', self.Config.get_b('probeA2', 'sdata2'))
+        self.API.SignalProbe(b'd1', self.Config.get_b('probeD1', 'clk'))
+        self.API.SignalProbe(b'd2', self.Config.get_b('probeD2', 'ctr'))
 
     def save_dac_parameters(self, roc_id=0):
         return [self.save_dac_parameters(i) for i in range(self.NROCs)] if roc_id is None else self.ROCDACs[roc_id].save()
+
+
+def byte_dic(lst):
+    return [dic.b for dic in lst]
