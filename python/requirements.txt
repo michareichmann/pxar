@@ -5,3 +5,4 @@ progressbar
 screeninfo
 ipython
 cython
+h5py
