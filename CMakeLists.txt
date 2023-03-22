@@ -1,6 +1,6 @@
 ########################################################
 # CMake file for the pXar framework
-CMAKE_MINIMUM_REQUIRED(VERSION 2.4 FATAL_ERROR)
+CMAKE_MINIMUM_REQUIRED(VERSION 2.8.12 FATAL_ERROR)
 IF(COMMAND CMAKE_POLICY)
   CMAKE_POLICY(SET CMP0003 NEW)
 ENDIF(COMMAND CMAKE_POLICY)
@@ -11,7 +11,7 @@ PROJECT( pxar )
 # UPDATE THIS BEFORE RELEASING A SOURCE CODE TARBALL!
 SET(PXAR_VERSION "2.8.0")
 SET(PXAR_FW_VERSION "4.6")
-set (CMAKE_CXX_STANDARD 14)
+set (CMAKE_CXX_STANDARD 17)
 
 #########################################
 # pxar build options and their defaults #
@@ -19,7 +19,7 @@ set (CMAKE_CXX_STANDARD 14)
 
 OPTION(BUILD_tools  "Compile pxar tools? (flash, testpxar...)" OFF)
 OPTION(USE_FTD2XX "Use the proprietary FTDI library instead of the open source version" ON)
-OPTION(BUILD_pxarui "Compile pXar UI, tests and executables (requires ROOT)?" ON)
+OPTION(BUILD_pxarui "Compile pXar UI, tests and executables (requires ROOT)?" OFF)
 
 # Build flag for Ethernet interface implementation:
 OPTION(INTERFACE_ETH "Build DTB Ethernet interface?" OFF)
